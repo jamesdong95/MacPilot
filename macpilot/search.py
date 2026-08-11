@@ -49,3 +49,28 @@ def search(database, query: str, limit: int = 20) -> list[SearchResult]:
         )
         for row in rows
     ]
+
+
+def list_indexed(
+    database,
+    *,
+    root_path: str | Path | None = None,
+    limit: int = 200,
+) -> list[SearchResult]:
+    """Return indexed files without changing the local database or filesystem."""
+    if limit < 1 or limit > 200:
+        raise ValueError("limit must be between 1 and 200")
+    rows = database.list_files(root_path=root_path)[:limit]
+    return [
+        SearchResult(
+            file_id=int(row["id"]),
+            path=Path(row["path"]),
+            filename=row["name"],
+            extension=row["extension"],
+            size=int(row["size"]),
+            modified_at=datetime.fromtimestamp(row["mtime_ns"] / 1_000_000_000),
+            snippet=row["name"],
+            score=0.0,
+        )
+        for row in rows
+    ]

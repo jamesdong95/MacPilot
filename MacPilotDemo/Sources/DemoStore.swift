@@ -1,45 +1,316 @@
+import AppKit
 import Foundation
 import SwiftUI
 
 
+@MainActor
 final class DemoStore: ObservableObject {
-    @Published var query = ""
+    @Published var query = "" {
+        didSet {
+            guard oldValue != query else { return }
+            scheduleSearch()
+        }
+    }
     @Published var selectedSection: AppSection? = .search
     @Published var selectedFile: DemoFile?
-    @Published private(set) var files = DemoData.files
-    @Published private(set) var suggestions = DemoData.suggestions
-    @Published private(set) var actions = DemoData.actions
-    @Published private(set) var statusMessage = "Demo mode · no files will be changed"
+    @Published private(set) var files: [DemoFile] = []
+    @Published private(set) var suggestions: [DemoSuggestion] = []
+    @Published private(set) var actions: [ActivityEntry] = []
+    @Published private(set) var workspacePath: String?
+    @Published private(set) var coreStatus: CoreStatus?
+    @Published private(set) var isBusy = false
+    @Published private(set) var statusMessage: String
+
+    private(set) var coreDescription: String
+    private let client: MacPilotClient?
+    private var searchResults: [DemoFile] = []
+    private var operationTask: Task<Void, Never>?
+    private var securityScopedWorkspaceURL: URL?
+
+    init(client: MacPilotClient? = MacPilotClient.discover()) {
+        self.client = client
+        self.coreDescription = client?.displayName ?? "Local Python core unavailable"
+        self.statusMessage = client == nil
+            ? "Local core not found · set MACPILOT_PROJECT_ROOT or install macpilot"
+            : "Choose a folder to index · no files will be changed"
+    }
+
+    deinit {
+        operationTask?.cancel()
+        securityScopedWorkspaceURL?.stopAccessingSecurityScopedResource()
+    }
 
     var filteredFiles: [DemoFile] {
-        let term = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !term.isEmpty else { return files }
-        return files.filter { file in
-            [file.name, file.path, file.kind, file.snippet]
-                .joined(separator: " ")
-                .localizedCaseInsensitiveContains(term)
+        query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? files
+            : searchResults
+    }
+
+    var hasCore: Bool {
+        client != nil
+    }
+
+    var workspaceName: String {
+        guard let workspacePath else { return "No folder selected" }
+        return URL(fileURLWithPath: workspacePath).lastPathComponent
+    }
+
+    func chooseWorkspace() {
+        guard client != nil else {
+            statusMessage = "Local core unavailable · configure the Python core before indexing"
+            return
+        }
+
+        let panel = NSOpenPanel()
+        panel.title = "Choose a folder for MacPilot"
+        panel.message = "MacPilot will index this folder locally. It will not move or delete files."
+        panel.prompt = "Index Folder"
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.begin { [weak self] response in
+            guard response == .OK, let url = panel.url else { return }
+            self?.indexWorkspace(url)
         }
     }
 
-    func apply(_ suggestion: DemoSuggestion) {
+    func indexWorkspace(_ url: URL) {
+        guard let client else {
+            statusMessage = "Local core unavailable · configure the Python core before indexing"
+            return
+        }
+
+        let workspaceURL = url.standardizedFileURL
+        guard workspaceURL.isFileURL else {
+            statusMessage = "Invalid folder path · choose a local file URL"
+            return
+        }
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(
+            atPath: workspaceURL.path,
+            isDirectory: &isDirectory
+        ), isDirectory.boolValue else {
+            statusMessage = "Invalid folder path · the selected directory is unavailable"
+            return
+        }
+
+        prepareWorkspaceAccess(for: workspaceURL)
+        workspacePath = workspaceURL.path
+        files = []
+        suggestions = []
+        actions = []
+        coreStatus = nil
+        selectedFile = nil
+        searchResults = []
+        operationTask?.cancel()
+        isBusy = true
+        statusMessage = "Indexing \(workspaceURL.path) locally…"
+
+        operationTask = Task { [weak self] in
+            do {
+                let summary = try await client.index(root: workspaceURL)
+                let indexedFiles = try await client.list(root: workspaceURL)
+                let coreSuggestions = try await client.suggestions(root: workspaceURL)
+                let coreActions = try await client.actions()
+                let coreStatus = try await client.status()
+                guard !Task.isCancelled else { return }
+
+                self?.files = indexedFiles.map(Self.makeFile)
+                self?.suggestions = coreSuggestions.map(Self.makeSuggestion)
+                self?.actions = coreActions.map(Self.makeActivity)
+                self?.coreStatus = coreStatus
+                self?.isBusy = false
+                self?.statusMessage = Self.indexStatus(
+                    summary: summary,
+                    totalFiles: indexedFiles.count,
+                    workspace: workspaceURL.path
+                )
+            } catch {
+                guard !Task.isCancelled else { return }
+                self?.isBusy = false
+                self?.statusMessage = Self.errorMessage(error)
+            }
+        }
+    }
+
+    func preview(_ suggestion: DemoSuggestion) {
         guard let index = suggestions.firstIndex(where: { $0.id == suggestion.id }) else { return }
-        guard !suggestions[index].isApplied else { return }
-        suggestions[index].isApplied = true
-        actions.insert(
-            ActivityEntry(
-                action: "Prepared move",
-                detail: "\(suggestion.files.count) files → \(suggestion.destination)",
-                date: "Just now"
-            ),
-            at: 0
-        )
-        statusMessage = "Preview applied in demo mode · real file actions require confirmation"
+        guard !suggestions[index].isPreviewed else { return }
+        guard let client else {
+            statusMessage = "Local core unavailable · preview could not be created"
+            return
+        }
+
+        operationTask?.cancel()
+        isBusy = true
+        statusMessage = "Preparing a no-change preview…"
+        let sources = suggestion.sourcePaths
+        let destination = suggestion.destination
+
+        operationTask = Task { [weak self] in
+            do {
+                for source in sources {
+                    guard !Task.isCancelled else { return }
+                    let filename = URL(fileURLWithPath: source).lastPathComponent
+                    let destinationPath = URL(fileURLWithPath: destination, isDirectory: true)
+                        .appendingPathComponent(filename)
+                        .path
+                    _ = try await client.previewMove(
+                        source: source,
+                        destination: destinationPath
+                    )
+                }
+                guard !Task.isCancelled else { return }
+                if let index = self?.suggestions.firstIndex(where: { $0.id == suggestion.id }) {
+                    self?.suggestions[index].isPreviewed = true
+                }
+                self?.isBusy = false
+                self?.statusMessage = "Preview ready · no files were changed"
+            } catch {
+                guard !Task.isCancelled else { return }
+                self?.isBusy = false
+                self?.statusMessage = Self.errorMessage(error)
+            }
+        }
     }
 
     func undo(_ action: ActivityEntry) {
-        guard let index = actions.firstIndex(where: { $0.id == action.id }) else { return }
-        guard !actions[index].isUndone else { return }
-        actions[index].isUndone = true
-        statusMessage = "Action marked as undone in demo mode"
+        guard action.coreActionID != nil else {
+            statusMessage = "Undo is available after a real apply, not in read-only mode"
+            return
+        }
+        statusMessage = "Undo is intentionally disabled until the apply flow is enabled"
+    }
+
+    private func scheduleSearch() {
+        operationTask?.cancel()
+        let term = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !term.isEmpty else {
+            searchResults = []
+            isBusy = false
+            if workspacePath != nil {
+                statusMessage = "Showing indexed files · local only"
+            }
+            return
+        }
+        guard let client else {
+            searchResults = []
+            isBusy = false
+            statusMessage = "Local core unavailable · search cannot run"
+            return
+        }
+        guard workspacePath != nil else {
+            searchResults = []
+            isBusy = false
+            statusMessage = "Choose a folder before searching"
+            return
+        }
+
+        isBusy = true
+        operationTask = Task { [weak self] in
+            do {
+                let results = try await client.search(query: term)
+                guard !Task.isCancelled else { return }
+                self?.searchResults = results.map(Self.makeFile)
+                if let selected = self?.selectedFile,
+                   !results.contains(where: { $0.path == selected.path }) {
+                    self?.selectedFile = nil
+                }
+                self?.isBusy = false
+                self?.statusMessage = "Found \(results.count) matching files · local only"
+            } catch {
+                guard !Task.isCancelled else { return }
+                self?.searchResults = []
+                self?.isBusy = false
+                self?.statusMessage = Self.errorMessage(error)
+            }
+        }
+    }
+
+    private func prepareWorkspaceAccess(for url: URL) {
+        if securityScopedWorkspaceURL?.path == url.path {
+            return
+        }
+
+        securityScopedWorkspaceURL?.stopAccessingSecurityScopedResource()
+        securityScopedWorkspaceURL = nil
+        if url.startAccessingSecurityScopedResource() {
+            securityScopedWorkspaceURL = url
+        }
+    }
+
+    private static func makeFile(_ result: CoreSearchResult) -> DemoFile {
+        DemoFile(
+            id: result.path,
+            name: result.filename,
+            path: result.path,
+            kind: kind(for: result.extension),
+            size: ByteCountFormatter.string(
+                fromByteCount: Int64(result.size),
+                countStyle: .file
+            ),
+            modified: displayDate(result.modifiedAt),
+            snippet: result.snippet
+        )
+    }
+
+    private static func makeSuggestion(_ suggestion: CoreSuggestion) -> DemoSuggestion {
+        DemoSuggestion(
+            id: suggestion.destination,
+            title: suggestion.category,
+            files: suggestion.files.map { URL(fileURLWithPath: $0).lastPathComponent },
+            sourcePaths: suggestion.files,
+            destination: suggestion.destination,
+            reason: suggestion.reason
+        )
+    }
+
+    private static func makeActivity(_ action: CoreAction) -> ActivityEntry {
+        let source = URL(fileURLWithPath: action.sourcePath).lastPathComponent
+        let destination = URL(fileURLWithPath: action.destinationPath).path
+        return ActivityEntry(
+            id: "action-\(action.id)",
+            coreActionID: action.id,
+            action: "Move recorded",
+            detail: "\(source) → \(destination)",
+            date: displayDate(action.appliedAt),
+            isUndone: action.undoneAt != nil
+        )
+    }
+
+    private static func kind(for fileExtension: String) -> String {
+        switch fileExtension.lowercased() {
+        case ".pdf": return "PDF"
+        case ".png", ".jpg", ".jpeg", ".gif", ".webp", ".heic": return "Image"
+        case ".md", ".markdown": return "Markdown"
+        case ".txt": return "Text"
+        case ".csv", ".xls", ".xlsx": return "Spreadsheet"
+        case ".doc", ".docx": return "Document"
+        default: return fileExtension.isEmpty ? "File" : fileExtension.uppercased()
+        }
+    }
+
+    private static func displayDate(_ value: String) -> String {
+        value.replacingOccurrences(of: "T", with: " ")
+    }
+
+    private static func indexStatus(
+        summary: CoreIndexSummary,
+        totalFiles: Int,
+        workspace: String
+    ) -> String {
+        var message = "Indexed \(totalFiles) files · \(workspace) · local only"
+        if summary.skippedSymlinks > 0 {
+            message += " · skipped \(summary.skippedSymlinks) symlink(s)"
+        }
+        return message
+    }
+
+    private static func errorMessage(_ error: Error) -> String {
+        if let localized = error as? LocalizedError,
+           let description = localized.errorDescription {
+            return description
+        }
+        return "Local core error · \(error.localizedDescription)"
     }
 }

@@ -1,6 +1,6 @@
 # MacPilotDemo
 
-Native SwiftUI sample-data demo for MacPilot.
+Native SwiftUI read-only client for the MacPilot Python core.
 
 ## Run in Xcode
 
@@ -9,18 +9,21 @@ Native SwiftUI sample-data demo for MacPilot.
 3. Choose **My Mac** as the run destination.
 4. Press **Run**.
 
-The demo is intentionally safe to explore. It uses in-memory sample data and
-does not read, move, delete, or upload files. It demonstrates:
+The client is intentionally read-only to explore. It connects to the local
+Python core and demonstrates:
 
-- Local file search presentation.
-- File metadata inspection.
-- Deterministic organization suggestions.
-- Preview-style action confirmation.
-- Undoable activity history.
+- Indexing a user-selected folder into local SQLite.
+- Search over real filenames, paths, and indexed text.
+- File metadata inspection from real search results.
+- Deterministic organization suggestions from the core.
+- Move previews that never pass `--apply`.
+- Read-only action-log presentation.
 - Local-only privacy messaging.
 
-The SwiftUI demo is a visual product prototype for this MVP. It is not yet
-bridged to the Python core or to real filesystem permissions.
+The bridge discovers the core from an installed `macpilot` executable, the
+`MACPILOT_CLI` environment variable, or `MACPILOT_PROJECT_ROOT` for a source
+checkout. `MACPILOT_DB` can be used to isolate the SQLite database during
+development. The native UI does not apply moves or execute undo yet.
 
 ## Command-line build
 

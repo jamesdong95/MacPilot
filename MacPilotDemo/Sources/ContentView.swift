@@ -60,10 +60,30 @@ private struct SidebarView: View {
             .listStyle(.sidebar)
 
             VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 8) {
+                    Image(systemName: "folder")
+                        .foregroundStyle(.tint)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(store.workspaceName)
+                            .font(.callout.weight(.semibold))
+                            .lineLimit(1)
+                        Text(store.hasCore ? "Python core connected" : "Python core unavailable")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                }
+                Button("Choose folder…") { store.chooseWorkspace() }
+                    .buttonStyle(.bordered)
+                    .disabled(!store.hasCore || store.isBusy)
+            }
+            .padding(.horizontal, 14)
+
+            VStack(alignment: .leading, spacing: 10) {
                 Label("Privacy protected", systemImage: "lock.shield.fill")
                     .font(.callout.weight(.semibold))
                     .foregroundStyle(.green)
-                Text("This demo uses sample data. MacPilot never changes a file without confirmation.")
+                Text("Search and previews stay local. File changes are not enabled in this read-only slice.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -88,11 +108,27 @@ private struct SearchView: View {
             )
 
             HStack(spacing: 10) {
+                Label(store.workspaceName, systemImage: "folder.fill")
+                    .font(.callout.weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                Spacer()
+                if store.isBusy {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+                Button("Choose folder…") { store.chooseWorkspace() }
+                    .buttonStyle(.bordered)
+                    .disabled(!store.hasCore || store.isBusy)
+            }
+
+            HStack(spacing: 10) {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(.secondary)
                 TextField("Try: project invoice or launch checklist", text: $store.query)
                     .textFieldStyle(.plain)
                     .font(.title3)
+                    .disabled(store.isBusy)
                 if !store.query.isEmpty {
                     Button { store.query = "" } label: {
                         Image(systemName: "xmark.circle.fill")
@@ -114,6 +150,10 @@ private struct SearchView: View {
                     .foregroundStyle(.green)
             }
 
+            if store.workspacePath == nil {
+                EmptyWorkspaceCard { store.chooseWorkspace() }
+            }
+
             HStack(alignment: .top, spacing: 18) {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack {
@@ -131,6 +171,12 @@ private struct SearchView: View {
                                 FileRow(file: file, selected: store.selectedFile?.id == file.id) {
                                     store.selectedFile = file
                                 }
+                            }
+                            if store.filteredFiles.isEmpty, store.workspacePath != nil {
+                                Text(store.query.isEmpty ? "No indexed files yet." : "No matching files.")
+                                    .font(.callout)
+                                    .foregroundStyle(.secondary)
+                                    .frame(maxWidth: .infinity, minHeight: 100)
                             }
                         }
                     }
@@ -173,8 +219,14 @@ private struct SuggestionsView: View {
                 LazyVStack(spacing: 14) {
                     ForEach(store.suggestions) { suggestion in
                         SuggestionCard(suggestion: suggestion) {
-                            store.apply(suggestion)
+                            store.preview(suggestion)
                         }
+                    }
+                    if store.suggestions.isEmpty {
+                        Text("Index a folder to generate local suggestions.")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, minHeight: 100)
                     }
                 }
             }
@@ -190,8 +242,8 @@ private struct ActivityView: View {
         VStack(alignment: .leading, spacing: 24) {
             PageHeader(
                 eyebrow: "AUDIT TRAIL",
-                title: "Everything stays undoable.",
-                subtitle: "A clear history makes local automation safe to trust."
+                title: "Local activity, clearly recorded.",
+                subtitle: "Existing action records are shown for audit. This client does not apply or undo filesystem changes."
             )
 
             ScrollView {
@@ -214,8 +266,9 @@ private struct ActivityView: View {
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                                 if !action.isUndone {
-                                    Button("Undo") { store.undo(action) }
-                                        .buttonStyle(.bordered)
+                                    Text("Read-only")
+                                        .font(.caption.weight(.semibold))
+                                        .foregroundStyle(.secondary)
                                 } else {
                                     Text("Undone")
                                         .font(.caption.weight(.semibold))
@@ -225,6 +278,12 @@ private struct ActivityView: View {
                         }
                         .padding(16)
                         .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 12))
+                    }
+                    if store.actions.isEmpty {
+                        Text("No applied actions in the local action log.")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, minHeight: 100)
                     }
                 }
             }
@@ -368,15 +427,39 @@ private struct EmptyInspector: View {
     }
 }
 
+private struct EmptyWorkspaceCard: View {
+    let action: () -> Void
+
+    var body: some View {
+        HStack(spacing: 14) {
+            Image(systemName: "folder.badge.plus")
+                .font(.title2)
+                .foregroundStyle(.tint)
+            VStack(alignment: .leading, spacing: 5) {
+                Text("Connect a local folder")
+                    .font(.headline)
+                Text("MacPilot will index it locally and keep search and previews read-only.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button("Choose folder…", action: action)
+                .buttonStyle(.borderedProminent)
+        }
+        .padding(16)
+        .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 12))
+    }
+}
+
 private struct SuggestionCard: View {
     let suggestion: DemoSuggestion
     let action: () -> Void
 
     var body: some View {
         HStack(alignment: .top, spacing: 16) {
-            Image(systemName: suggestion.isApplied ? "checkmark.seal.fill" : "sparkles")
+            Image(systemName: suggestion.isPreviewed ? "checkmark.seal.fill" : "sparkles")
                 .font(.title2)
-                .foregroundStyle(suggestion.isApplied ? Color.green : Color.accentColor)
+                .foregroundStyle(suggestion.isPreviewed ? Color.green : Color.accentColor)
                 .frame(width: 38, height: 38)
                 .background(.quaternary, in: RoundedRectangle(cornerRadius: 10))
             VStack(alignment: .leading, spacing: 8) {
@@ -393,8 +476,8 @@ private struct SuggestionCard: View {
                     .foregroundStyle(.tint)
             }
             Spacer()
-            if suggestion.isApplied {
-                Text("Prepared")
+            if suggestion.isPreviewed {
+                Text("Previewed")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.green)
             } else {

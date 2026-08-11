@@ -43,18 +43,19 @@ Most file automation tools optimize for speed first. MacPilot optimizes for **co
 - Preview, apply, inspect, and undo file moves.
 - Inspect current index and action-log state with `status` and `actions`.
 
-### Native SwiftUI demo
+### Native SwiftUI read-only client
 
-The repository also contains a polished macOS SwiftUI prototype for exploring the product direction:
+The repository also contains a macOS SwiftUI client connected to the local Python core:
 
-- Local file search presentation.
-- File metadata details.
-- Organization suggestions.
-- Preview-style action confirmation.
-- Undoable activity history.
-- Local-only privacy messaging.
+- Choose a local folder and index it into SQLite.
+- Search real filenames, paths, and indexed text content.
+- Inspect real file metadata and snippets.
+- Review deterministic organization suggestions.
+- Request move previews without passing `--apply`.
+- Read the local action log without enabling apply or undo from the UI.
+- Keep all core calls local with no upload or network dependency.
 
-The SwiftUI demo uses **in-memory sample data only**. It does not read, move, delete, or upload real files, and it is intentionally not bridged to the Python core yet.
+The native client is intentionally **read-only in this milestone**. It never passes `--apply`, never deletes files, and does not expose undo execution yet. To let the client find the Python core during development, set `MACPILOT_PROJECT_ROOT` in the Xcode scheme, install the `macpilot` command on `PATH`, or set `MACPILOT_CLI` to an executable path. `MACPILOT_DB` can point to an isolated SQLite database for testing.
 
 ## Quick start
 
@@ -121,11 +122,18 @@ python3 -m macpilot --db "$DB" undo 1 --apply
 
 Applied moves require the source to be indexed first. MacPilot refuses symlink paths, refuses to overwrite existing destinations, coordinates filesystem and SQLite updates, and attempts to restore the original path if recording the action fails. There is no delete command.
 
-## Open the native demo
+## Open the native client
 
 Requirements: macOS and Xcode 15 or newer.
 
 Open `MacPilotDemo/MacPilotDemo.xcodeproj` in Xcode, select the shared `MacPilotDemo` scheme, choose **My Mac**, and press **Run**.
+
+For a source checkout, add these Xcode scheme environment variables before running:
+
+```text
+MACPILOT_PROJECT_ROOT=/absolute/path/to/MacPilot
+MACPILOT_DB=/tmp/macpilot-demo.sqlite3
+```
 
 Or build without code signing from the repository root:
 
@@ -141,7 +149,7 @@ xcodebuild \
 open /tmp/MacPilotDerivedData/Build/Products/Debug/MacPilotDemo.app
 ```
 
-The demo is safe to explore because it uses sample data and does not access the real filesystem.
+The client asks you to choose a folder before indexing. Indexing, search, suggestions, and move previews use the real local filesystem and SQLite index, but the UI does not enable filesystem mutations in this milestone.
 
 ## Safety model
 
@@ -159,7 +167,7 @@ The demo is safe to explore because it uses sample data and does not access the 
 ```text
 macpilot/                 Python core and CLI
 tests/                    Standard-library unittest suite
-MacPilotDemo/             Native SwiftUI sample-data application
+MacPilotDemo/             Native SwiftUI read-only client
 docs/assets/              GitHub README artwork
 .github/workflows/        Python and macOS CI
 ```
@@ -170,8 +178,8 @@ MacPilot is an MVP for local testing and product exploration, not a finished bac
 
 - Semantic embeddings or automatic semantic classification.
 - Ollama integration.
-- A real-file SwiftUI bridge to the Python core.
 - Background file automation.
+- Apply/undo controls in the native UI.
 - Signed and notarized distribution.
 
 Contributions that preserve the local-first, preview-first safety model are welcome. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the verification checklist and project expectations.

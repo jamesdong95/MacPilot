@@ -69,6 +69,75 @@ class CliTests(unittest.TestCase):
         self.assertTrue(source.exists())
         self.assertFalse(destination.exists())
 
+    def test_read_only_payloads_have_stable_shapes(self) -> None:
+        invoice_one = self.workspace / "invoice-january.pdf"
+        invoice_two = self.workspace / "invoice-february.pdf"
+        notes = self.workspace / "project-notes.txt"
+        invoice_one.write_bytes(b"pdf-one")
+        invoice_two.write_bytes(b"pdf-two")
+        notes.write_text("project launch checklist", encoding="utf-8")
+
+        exit_code, index_payload, error = self.run_cli("index", str(self.workspace))
+        self.assertEqual(exit_code, 0, error)
+        self.assertEqual(
+            set(index_payload),
+            {
+                "root",
+                "indexed_files",
+                "skipped_files",
+                "removed_files",
+                "content_files",
+                "skipped_symlinks",
+                "ignored_directories",
+            },
+        )
+
+        exit_code, list_payload, error = self.run_cli("list", "--root", str(self.workspace))
+        self.assertEqual(exit_code, 0, error)
+        self.assertEqual(len(list_payload), 3)
+        self.assertEqual(
+            set(list_payload[0]),
+            {"file_id", "path", "filename", "extension", "size", "modified_at", "snippet", "score"},
+        )
+
+        exit_code, search_payload, error = self.run_cli("search", "invoice")
+        self.assertEqual(exit_code, 0, error)
+        self.assertEqual(len(search_payload), 2)
+        self.assertEqual(set(search_payload[0]), set(list_payload[0]))
+
+        exit_code, suggest_payload, error = self.run_cli("suggest", str(self.workspace))
+        self.assertEqual(exit_code, 0, error)
+        self.assertEqual(len(suggest_payload), 1)
+        self.assertEqual(
+            set(suggest_payload[0]),
+            {"category", "destination", "files", "reason"},
+        )
+        self.assertEqual(suggest_payload[0]["category"], "Documents/PDF")
+
+        destination = self.workspace / "Organized" / "invoice-january.pdf"
+        exit_code, preview_payload, error = self.run_cli(
+            "move", str(invoice_one), str(destination)
+        )
+        self.assertEqual(exit_code, 0, error)
+        self.assertEqual(
+            set(preview_payload), {"action_id", "source", "destination", "mode"}
+        )
+        self.assertEqual(preview_payload["mode"], "preview")
+        self.assertTrue(invoice_one.exists())
+        self.assertFalse(destination.exists())
+
+        exit_code, status_payload, error = self.run_cli("status")
+        self.assertEqual(exit_code, 0, error)
+        self.assertEqual(
+            set(status_payload),
+            {"files", "pending_suggestions", "active_actions", "undone_actions"},
+        )
+        self.assertEqual(status_payload["active_actions"], 0)
+
+        exit_code, actions_payload, error = self.run_cli("actions")
+        self.assertEqual(exit_code, 0, error)
+        self.assertEqual(actions_payload, [])
+
     def test_search_rejects_non_positive_limit(self) -> None:
         exit_code, payload, error = self.run_cli("search", "report", "--limit", "0")
         self.assertEqual(exit_code, 2)

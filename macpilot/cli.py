@@ -10,7 +10,7 @@ from . import __version__
 from .database import Database
 from .indexer import Indexer
 from .organizer import apply_move, preview_move, suggest, undo_action
-from .search import search
+from .search import list_indexed, search
 
 
 def _path(value: str) -> Path:
@@ -52,6 +52,10 @@ def build_parser() -> argparse.ArgumentParser:
     search_parser.add_argument("query")
     search_parser.add_argument("--limit", type=int, default=20)
 
+    list_parser = commands.add_parser("list", help="List indexed files")
+    list_parser.add_argument("--root", type=_path)
+    list_parser.add_argument("--limit", type=int, default=200)
+
     suggest_parser = commands.add_parser("suggest", help="Suggest safe file grouping")
     suggest_parser.add_argument("root", type=_path)
 
@@ -91,6 +95,15 @@ def main(argv: list[str] | None = None) -> int:
                 _print(asdict(Indexer(database).index_root(args.root)))
             elif args.command == "search":
                 _print([asdict(result) for result in search(database, args.query, args.limit)])
+            elif args.command == "list":
+                _print(
+                    [
+                        asdict(result)
+                        for result in list_indexed(
+                            database, root_path=args.root, limit=args.limit
+                        )
+                    ]
+                )
             elif args.command == "suggest":
                 _print([asdict(item) for item in suggest(database, args.root)])
             elif args.command == "move":
