@@ -30,8 +30,12 @@ xcodebuild \
 - Do not add telemetry, uploads, or network calls without a clear product
   decision and documentation.
 - Preserve preview-first behavior for filesystem mutations.
-- Any applied move must remain undoable and must not overwrite an existing
-  destination.
+- Any applied move must remain undoable, must not follow symlinks, and must not
+  overwrite an existing destination, including when a destination appears
+  during the move.
+- Keep filesystem changes and the SQLite action/index update coordinated; if a
+  database update fails after a move, restore the original path or report the
+  rollback failure explicitly.
 - Add a regression test before changing behavior.
 - Do not commit databases, build products, credentials, or user data.
 

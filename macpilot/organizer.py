@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import errno
+import os
 import re
 import shutil
+import stat
 from collections import defaultdict
 from pathlib import Path
 
@@ -93,16 +96,164 @@ def generate_suggestions(database: Database) -> list[OrganizationSuggestion]:
     return sorted(result, key=lambda item: str(item.source_path))
 
 
-def preview_move(source: Path | str, destination: Path | str) -> MoveResult:
-    source_path = Path(source).expanduser().resolve()
-    destination_path = Path(destination).expanduser().resolve()
-    if not source_path.exists():
-        raise FileNotFoundError(source_path)
-    if source_path.is_symlink() or not source_path.is_file():
+def _absolute_path(value: Path | str) -> Path:
+    """Normalize a path without resolving symlinks."""
+    return Path(os.path.abspath(os.fspath(Path(value).expanduser())))
+
+
+_SYSTEM_SYMLINK_ALIASES = {
+    "/var": "/private/var",
+    "/tmp": "/private/tmp",
+    "/etc": "/private/etc",
+}
+
+
+def _symlink_component(path: Path) -> Path | None:
+    current = Path(path.anchor) if path.anchor else Path()
+    parts = path.parts[1:] if path.anchor else path.parts
+    for part in parts:
+        current /= part
+        try:
+            mode = os.lstat(os.fspath(current)).st_mode
+        except FileNotFoundError:
+            continue
+        if stat.S_ISLNK(mode):
+            allowed_target = _SYSTEM_SYMLINK_ALIASES.get(os.fspath(current))
+            if (
+                allowed_target is not None
+                and os.path.realpath(os.fspath(current)) == allowed_target
+            ):
+                continue
+            return current
+    return None
+
+
+def _assert_no_symlink(path: Path, label: str) -> None:
+    link = _symlink_component(path)
+    if link is not None:
+        raise ValueError(f"{label} cannot contain a symlink: {link}")
+
+
+def _file_identity(path: Path) -> tuple[int, int]:
+    file_stat = os.lstat(os.fspath(path))
+    if not stat.S_ISREG(file_stat.st_mode):
         raise ValueError("Only regular files can be moved by MacPilot")
-    if destination_path.exists():
+    return file_stat.st_dev, file_stat.st_ino
+
+
+def preview_move(source: Path | str, destination: Path | str) -> MoveResult:
+    source_path = _absolute_path(source)
+    destination_path = _absolute_path(destination)
+    _assert_no_symlink(source_path, "Source")
+    _assert_no_symlink(destination_path, "Destination")
+    try:
+        source_stat = os.lstat(os.fspath(source_path))
+    except FileNotFoundError:
+        raise FileNotFoundError(source_path)
+    if not stat.S_ISREG(source_stat.st_mode):
+        raise ValueError("Only regular files can be moved by MacPilot")
+    try:
+        os.lstat(os.fspath(destination_path))
+    except FileNotFoundError:
+        pass
+    else:
         raise FileExistsError(destination_path)
     return MoveResult(action_id=0, source=source_path, destination=destination_path)
+
+
+def _copy_no_replace(
+    source: Path,
+    destination: Path,
+    expected_identity: tuple[int, int],
+) -> None:
+    source_fd: int | None = None
+    destination_fd: int | None = None
+    destination_created = False
+    try:
+        source_flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+        source_fd = os.open(os.fspath(source), source_flags)
+        source_stat = os.fstat(source_fd)
+        source_identity = (source_stat.st_dev, source_stat.st_ino)
+        if not stat.S_ISREG(source_stat.st_mode) or source_identity != expected_identity:
+            raise RuntimeError("Source changed while the move was being prepared")
+
+        destination_fd = os.open(
+            os.fspath(destination),
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+            stat.S_IMODE(source_stat.st_mode),
+        )
+        destination_created = True
+        with os.fdopen(source_fd, "rb") as source_file:
+            source_fd = None
+            with os.fdopen(destination_fd, "wb") as destination_file:
+                destination_fd = None
+                shutil.copyfileobj(source_file, destination_file)
+                destination_file.flush()
+                os.fsync(destination_file.fileno())
+
+        if _file_identity(source) != expected_identity:
+            raise RuntimeError("Source changed while the move was being completed")
+        os.unlink(os.fspath(source))
+    except Exception:
+        if source_fd is not None:
+            os.close(source_fd)
+        if destination_fd is not None:
+            os.close(destination_fd)
+        if destination_created:
+            try:
+                os.unlink(os.fspath(destination))
+            except FileNotFoundError:
+                pass
+        raise
+
+
+def _move_no_replace(source: Path | str, destination: Path | str) -> None:
+    """Move a regular file without following symlinks or replacing a destination."""
+    plan = preview_move(source, destination)
+    source_identity = _file_identity(plan.source)
+    plan.destination.parent.mkdir(parents=True, exist_ok=True)
+    _assert_no_symlink(plan.destination, "Destination")
+    try:
+        os.link(
+            os.fspath(plan.source),
+            os.fspath(plan.destination),
+            follow_symlinks=False,
+        )
+    except OSError as exc:
+        if exc.errno != errno.EXDEV:
+            raise
+        _copy_no_replace(plan.source, plan.destination, source_identity)
+        return
+
+    try:
+        destination_identity = _file_identity(plan.destination)
+        if (
+            destination_identity != source_identity
+            or _file_identity(plan.source) != source_identity
+        ):
+            raise RuntimeError("Source changed while the move was being completed")
+        os.unlink(os.fspath(plan.source))
+    except Exception:
+        try:
+            os.unlink(os.fspath(plan.destination))
+        except FileNotFoundError:
+            pass
+        raise
+
+
+def _rollback_filesystem_move(
+    source: Path,
+    destination: Path,
+    original_error: Exception,
+) -> None:
+    try:
+        _move_no_replace(destination, source)
+    except Exception as rollback_error:
+        raise RuntimeError(
+            "Filesystem move succeeded, but the database update failed and "
+            "automatic rollback also failed. "
+            f"Original error: {original_error}; rollback error: {rollback_error}"
+        ) from rollback_error
 
 
 def _apply_recorded_move(
@@ -114,17 +265,17 @@ def _apply_recorded_move(
     fingerprint: str,
 ) -> int:
     plan = preview_move(source, destination)
-    plan.destination.parent.mkdir(parents=True, exist_ok=True)
-    shutil.move(str(plan.source), str(plan.destination))
-    database.relocate_file(plan.source, plan.destination)
-    action_id = database.record_action(
-        suggestion_id=suggestion_id,
-        source_path=plan.source,
-        destination_path=plan.destination,
-        fingerprint=fingerprint,
-    )
-    database.set_suggestion_status(suggestion_id, "applied")
-    return action_id
+    _move_no_replace(plan.source, plan.destination)
+    try:
+        return database.record_applied_move(
+            suggestion_id=suggestion_id,
+            source_path=plan.source,
+            destination_path=plan.destination,
+            fingerprint=fingerprint,
+        )
+    except Exception as exc:
+        _rollback_filesystem_move(plan.source, plan.destination, exc)
+        raise
 
 
 def organize_suggestion(
@@ -150,8 +301,9 @@ def organize_suggestion(
 
 
 def apply_move(database: Database, source: Path | str, destination: Path | str) -> MoveResult:
-    source_path = Path(source).expanduser().resolve()
-    destination_path = Path(destination).expanduser().resolve()
+    plan = preview_move(source, destination)
+    source_path = plan.source
+    destination_path = plan.destination
     row = database.file_record(source_path)
     if row is None:
         raise ValueError(f"Source is not indexed: {source_path}")
@@ -182,17 +334,20 @@ def undo_action(
         raise ValueError(f"Action {action_id} is already undone")
     source = Path(action["destination_path"])
     destination = Path(action["source_path"])
+    plan = preview_move(source, destination)
     if not apply:
-        return OrganizationResult(False, action_id, source, destination)
-    if destination.exists():
-        raise FileExistsError(f"Undo would overwrite existing path: {destination}")
-    if not source.exists():
-        raise FileNotFoundError(source)
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    shutil.move(str(source), str(destination))
-    database.relocate_file(source, destination)
-    database.mark_action_undone(action_id)
-    return OrganizationResult(True, action_id, source, destination)
+        return OrganizationResult(False, action_id, plan.source, plan.destination)
+    _move_no_replace(plan.source, plan.destination)
+    try:
+        database.record_undone_move(
+            action_id=action_id,
+            source_path=plan.source,
+            destination_path=plan.destination,
+        )
+    except Exception as exc:
+        _rollback_filesystem_move(plan.source, plan.destination, exc)
+        raise
+    return OrganizationResult(True, action_id, plan.source, plan.destination)
 
 
 def undo(database: Database, action_id: int) -> MoveResult:

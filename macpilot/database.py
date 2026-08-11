@@ -264,6 +264,144 @@ class Database:
         )
         connection.commit()
 
+    def record_applied_move(
+        self,
+        *,
+        suggestion_id: int,
+        source_path: str | Path,
+        destination_path: str | Path,
+        fingerprint: str,
+    ) -> int:
+        """Atomically update the index and action log after a filesystem move."""
+        connection = self._ensure_open()
+        source = str(Path(source_path).resolve())
+        destination = str(Path(destination_path).resolve())
+        try:
+            source_row = connection.execute(
+                "SELECT id FROM files WHERE path = ?", (source,)
+            ).fetchone()
+            if source_row is None:
+                raise KeyError(f"Indexed file not found: {source}")
+
+            destination_row = connection.execute(
+                "SELECT id FROM files WHERE path = ?", (destination,)
+            ).fetchone()
+            if (
+                destination_row is not None
+                and destination_row["id"] != source_row["id"]
+            ):
+                raise FileExistsError(f"An indexed file already exists: {destination}")
+
+            suggestion_row = connection.execute(
+                """
+                SELECT id, source_path, destination_path
+                FROM suggestions
+                WHERE id = ?
+                """,
+                (suggestion_id,),
+            ).fetchone()
+            if suggestion_row is None:
+                raise KeyError(f"Suggestion not found: {suggestion_id}")
+            if (
+                suggestion_row["source_path"] != source
+                or suggestion_row["destination_path"] != destination
+            ):
+                raise ValueError("Suggestion paths do not match the applied move")
+
+            connection.execute(
+                "UPDATE files SET path = ?, indexed_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (destination, source_row["id"]),
+            )
+            cursor = connection.execute(
+                """
+                INSERT INTO actions
+                    (suggestion_id, source_path, destination_path, fingerprint)
+                VALUES (?, ?, ?, ?)
+                """,
+                (suggestion_id, source, destination, fingerprint),
+            )
+            updated = connection.execute(
+                "UPDATE suggestions SET status = 'applied' WHERE id = ?",
+                (suggestion_id,),
+            )
+            if updated.rowcount != 1:
+                raise KeyError(f"Suggestion not found: {suggestion_id}")
+            connection.commit()
+            return int(cursor.lastrowid)
+        except Exception:
+            connection.rollback()
+            raise
+
+    def record_undone_move(
+        self,
+        *,
+        action_id: int,
+        source_path: str | Path,
+        destination_path: str | Path,
+    ) -> None:
+        """Atomically restore the index and mark an action as undone."""
+        connection = self._ensure_open()
+        source = str(Path(source_path).resolve())
+        destination = str(Path(destination_path).resolve())
+        try:
+            action = connection.execute(
+                """
+                SELECT suggestion_id, source_path, destination_path, undone_at
+                FROM actions
+                WHERE id = ?
+                """,
+                (action_id,),
+            ).fetchone()
+            if action is None:
+                raise KeyError(f"Action not found: {action_id}")
+            if action["undone_at"] is not None:
+                raise ValueError(f"Action {action_id} is already undone")
+            if (
+                action["source_path"] != destination
+                or action["destination_path"] != source
+            ):
+                raise ValueError("Action paths do not match the undo request")
+
+            source_row = connection.execute(
+                "SELECT id FROM files WHERE path = ?", (source,)
+            ).fetchone()
+            if source_row is None:
+                raise KeyError(f"Indexed file not found: {source}")
+
+            destination_row = connection.execute(
+                "SELECT id FROM files WHERE path = ?", (destination,)
+            ).fetchone()
+            if (
+                destination_row is not None
+                and destination_row["id"] != source_row["id"]
+            ):
+                raise FileExistsError(f"An indexed file already exists: {destination}")
+
+            connection.execute(
+                "UPDATE files SET path = ?, indexed_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (destination, source_row["id"]),
+            )
+            updated = connection.execute(
+                """
+                UPDATE actions
+                SET undone_at = CURRENT_TIMESTAMP
+                WHERE id = ? AND undone_at IS NULL
+                """,
+                (action_id,),
+            )
+            if updated.rowcount != 1:
+                raise ValueError(f"Action {action_id} is already undone")
+            updated = connection.execute(
+                "UPDATE suggestions SET status = 'undone' WHERE id = ?",
+                (action["suggestion_id"],),
+            )
+            if updated.rowcount != 1:
+                raise KeyError(f"Suggestion not found: {action['suggestion_id']}")
+            connection.commit()
+        except Exception:
+            connection.rollback()
+            raise
+
     def upsert_suggestion(
         self,
         *,

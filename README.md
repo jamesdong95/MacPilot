@@ -80,7 +80,9 @@ python3 -m macpilot --db "$DB" undo 1 --apply
 ```
 
 `move --apply` requires the source file to be indexed first. MacPilot records
-the original and destination paths and refuses to overwrite an existing path.
+the original and destination paths, refuses to follow symlinks, and refuses to
+overwrite an existing path. Applied filesystem moves use a no-replace operation;
+if the database update fails, MacPilot attempts to restore the original path.
 It does not provide a delete command.
 
 ### Install the package locally (optional)
@@ -141,6 +143,7 @@ MacPilotDemo/             Native SwiftUI sample-data application
 - All indexing and search data stays in the local SQLite database.
 - No network/API dependency is used by the core.
 - Symlinks and common dependency directories are skipped during indexing.
+- Move and undo reject symlink paths and do not overwrite existing destinations.
 - File changes require an explicit `--apply` flag and are recorded for undo.
 - Review the JSON preview before applying a move.
 
