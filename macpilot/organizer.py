@@ -307,20 +307,29 @@ def apply_move(database: Database, source: Path | str, destination: Path | str) 
     row = database.file_record(source_path)
     if row is None:
         raise ValueError(f"Source is not indexed: {source_path}")
-    suggestion = database.upsert_suggestion(
-        source_path=source_path,
-        destination_path=destination_path,
-        group_key="manual",
-        reason="Explicit manual move",
-        fingerprint=row["fingerprint"],
-    )
-    action_id = _apply_recorded_move(
-        database,
-        suggestion_id=int(suggestion["id"]),
-        source=source_path,
-        destination=destination_path,
-        fingerprint=row["fingerprint"],
-    )
+    try:
+        suggestion = database.upsert_suggestion(
+            source_path=source_path,
+            destination_path=destination_path,
+            group_key="manual",
+            reason="Explicit manual move",
+            fingerprint=row["fingerprint"],
+            commit=False,
+        )
+        if suggestion["status"] != "pending":
+            raise ValueError(
+                f"Suggestion {suggestion['id']} is already {suggestion['status']}"
+            )
+        action_id = _apply_recorded_move(
+            database,
+            suggestion_id=int(suggestion["id"]),
+            source=source_path,
+            destination=destination_path,
+            fingerprint=row["fingerprint"],
+        )
+    except Exception:
+        database.rollback()
+        raise
     return MoveResult(action_id, source_path, destination_path)
 
 

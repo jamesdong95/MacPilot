@@ -109,6 +109,10 @@ class Database:
             raise RuntimeError("The MacPilot database is closed.")
         return self.connection
 
+    def rollback(self) -> None:
+        """Roll back the current transaction, if one is open."""
+        self._ensure_open().rollback()
+
     def file_record(self, path: str | Path) -> sqlite3.Row | None:
         connection = self._ensure_open()
         return connection.execute(
@@ -294,7 +298,7 @@ class Database:
 
             suggestion_row = connection.execute(
                 """
-                SELECT id, source_path, destination_path
+                SELECT id, source_path, destination_path, status
                 FROM suggestions
                 WHERE id = ?
                 """,
@@ -307,6 +311,10 @@ class Database:
                 or suggestion_row["destination_path"] != destination
             ):
                 raise ValueError("Suggestion paths do not match the applied move")
+            if suggestion_row["status"] != "pending":
+                raise ValueError(
+                    f"Suggestion {suggestion_id} is already {suggestion_row['status']}"
+                )
 
             connection.execute(
                 "UPDATE files SET path = ?, indexed_at = CURRENT_TIMESTAMP WHERE id = ?",
@@ -410,6 +418,7 @@ class Database:
         group_key: str,
         reason: str,
         fingerprint: str,
+        commit: bool = True,
     ) -> sqlite3.Row:
         connection = self._ensure_open()
         source = str(Path(source_path).resolve())
@@ -441,7 +450,8 @@ class Database:
                 """,
                 (group_key, reason, fingerprint, suggestion_id),
             )
-        connection.commit()
+        if commit:
+            connection.commit()
         return connection.execute(
             "SELECT * FROM suggestions WHERE id = ?", (suggestion_id,)
         ).fetchone()

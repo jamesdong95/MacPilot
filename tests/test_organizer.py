@@ -214,6 +214,46 @@ class OrganizerTests(unittest.TestCase):
         self.assertTrue(source.exists())
         self.assertFalse(destination.exists())
         self.assertEqual(database.action_count(), 0)
+        self.assertEqual(database.list_suggestions(), [])
+
+    def test_manual_apply_does_not_leave_suggestion_when_move_races(self):
+        database, root = self._indexed_database()
+        self.addCleanup(database.close)
+        source = root / "invoice-january.pdf"
+        destination = root / "organized.pdf"
+
+        def create_destination_then_race(*_args, **_kwargs):
+            destination.write_text("racer", encoding="utf-8")
+            raise FileExistsError(destination)
+
+        with patch(
+            "macpilot.organizer.os.link",
+            side_effect=create_destination_then_race,
+        ):
+            with self.assertRaises(FileExistsError):
+                apply_move(database, source, destination)
+
+        self.assertTrue(source.exists())
+        self.assertEqual(destination.read_text(encoding="utf-8"), "racer")
+        self.assertEqual(database.list_suggestions(), [])
+
+    def test_manual_apply_cannot_reuse_an_undone_suggestion(self):
+        database, root = self._indexed_database()
+        self.addCleanup(database.close)
+        source = root / "invoice-january.pdf"
+        destination = root / "organized.pdf"
+
+        applied = apply_move(database, source, destination)
+        assert applied.action_id is not None
+        undo_action(database, applied.action_id, apply=True)
+
+        with self.assertRaisesRegex(ValueError, "already undone"):
+            apply_move(database, source, destination)
+
+        self.assertTrue(source.exists())
+        self.assertFalse(destination.exists())
+        self.assertEqual(database.action_count(undone=False), 0)
+        self.assertEqual(database.action_count(undone=True), 1)
 
     def test_undo_restores_filesystem_when_database_recording_fails(self):
         database, _root = self._indexed_database()
