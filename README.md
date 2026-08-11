@@ -1,41 +1,64 @@
 # MacPilot
 
-MacPilot is a local-first file search and safe organization tool for macOS. The
-repository contains a dependency-light Python core and a native SwiftUI demo.
-The Python core never uploads file contents, never deletes files, and requires
-an explicit flag before a file move or undo is applied.
+<p align="center">
+  <img src="docs/assets/macpilot-github-hero.png" alt="MacPilot dark macOS workspace with local file search, safe organization cards, a privacy shield, and a no-cloud workflow" width="100%" />
+</p>
 
-## What is ready to try
+<p align="center">
+  <strong>Local-first file intelligence for macOS.</strong><br />
+  Search faster. Organize safely. Keep control of your files.
+</p>
 
-- SQLite metadata index with FTS5 filename and text-content search.
-- Safe indexing that skips common dependency directories and never follows
-  symlinks.
-- Deterministic organization suggestions.
-- Preview-first move and undo flows with an action log.
-- `status` and `actions` commands so a test run is inspectable.
-- Native SwiftUI sample-data demo for search, file details, suggestions, and
-  activity history. The demo does **not** touch real files and is intentionally
-  not connected to the Python core yet.
-- GitHub Actions checks for the Python package and macOS SwiftUI build.
+<p align="center">
+  <a href="https://github.com/jamesdong95/MacPilot/actions/workflows/python.yml"><img src="https://github.com/jamesdong95/MacPilot/actions/workflows/python.yml/badge.svg?branch=main" alt="Python core CI" /></a>
+  <a href="https://github.com/jamesdong95/MacPilot/actions/workflows/macos-demo.yml"><img src="https://github.com/jamesdong95/MacPilot/actions/workflows/macos-demo.yml/badge.svg?branch=main" alt="macOS demo CI" /></a>
+  <img src="https://img.shields.io/badge/platform-macOS-111827?logo=apple&logoColor=white" alt="macOS" />
+  <img src="https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white" alt="Python 3.11 or newer" />
+  <img src="https://img.shields.io/badge/privacy-local--first-06B6D4" alt="Local-first privacy" />
+</p>
 
-This is an MVP for local testing, not a finished background file-management
-agent. Semantic embeddings, Ollama integration, a real-file SwiftUI bridge,
-and a signed/notarized distribution are intentionally out of scope for this
-milestone.
+MacPilot is a dependency-light file search and safe-organization MVP for macOS. It builds a local SQLite index with FTS5, turns search results into deterministic organization suggestions, and keeps every filesystem mutation behind an explicit preview-and-apply flow.
 
-## Requirements
+> **The short version:** MacPilot helps you understand and organize your files without uploading them to a cloud service or silently changing your filesystem.
 
-- macOS for the native demo.
-- Python 3.11 or newer for the core.
-- SQLite with FTS5 support (the macOS and standard CPython builds normally have
-  it).
-- Xcode 15 or newer for the native demo. The project has been built locally
-  with Xcode 26.6.
+## Why MacPilot?
 
-The runtime core uses only Python's standard library. Build tooling is needed
-only when creating a wheel.
+Most file automation tools optimize for speed first. MacPilot optimizes for **control** first:
 
-## Run from source
+- **Local by default** — indexing and search stay in a local SQLite database.
+- **Read-only by default** — discovery and suggestions do not modify files.
+- **Preview before apply** — `move` and `undo` require an explicit `--apply` flag.
+- **No silent overwrite** — existing destinations and race-condition collisions are rejected.
+- **No symlink traversal** — unsafe source and destination paths are refused.
+- **Undoable actions** — applied moves are recorded in an action log.
+- **Dependency-light core** — the runtime uses Python's standard library and SQLite FTS5.
+
+## What you can try today
+
+### Python core and CLI
+
+- Index filenames and text content into SQLite FTS5.
+- Search indexed files with predictable local results.
+- Generate deterministic organization suggestions.
+- Preview, apply, inspect, and undo file moves.
+- Inspect current index and action-log state with `status` and `actions`.
+
+### Native SwiftUI demo
+
+The repository also contains a polished macOS SwiftUI prototype for exploring the product direction:
+
+- Local file search presentation.
+- File metadata details.
+- Organization suggestions.
+- Preview-style action confirmation.
+- Undoable activity history.
+- Local-only privacy messaging.
+
+The SwiftUI demo uses **in-memory sample data only**. It does not read, move, delete, or upload real files, and it is intentionally not bridged to the Python core yet.
+
+## Quick start
+
+### Run the Python core from source
 
 From the repository root:
 
@@ -44,57 +67,30 @@ python3 -m unittest discover -s tests -v
 python3 -m compileall -q macpilot
 ```
 
-Use an isolated database while testing:
+Use an isolated database while experimenting:
 
 ```bash
 DB=/tmp/macpilot.sqlite3
+
 python3 -m macpilot --db "$DB" index ~/Downloads
 python3 -m macpilot --db "$DB" search "project contract"
 python3 -m macpilot --db "$DB" suggest ~/Downloads
 python3 -m macpilot --db "$DB" status
 ```
 
-If `macpilot` is installed from the package, the same commands can be run with
-`macpilot` instead of `python3 -m macpilot`. Without `--db`, the default path is
-`~/.macpilot/index.sqlite3`.
+If the package is installed, use `macpilot` instead of `python3 -m macpilot`.
 
-### Safe move and undo flow
-
-Every mutating operation is preview-only unless `--apply` is present:
-
-```bash
-# Preview; the source is not changed.
-python3 -m macpilot --db "$DB" move \
-  ~/Downloads/report.pdf ~/Documents/Reports/report.pdf
-
-# Apply only after reviewing the JSON preview.
-python3 -m macpilot --db "$DB" move \
-  ~/Downloads/report.pdf ~/Documents/Reports/report.pdf --apply
-
-# Find the action id if needed.
-python3 -m macpilot --db "$DB" actions --active-only
-
-# Preview the undo, then apply it explicitly.
-python3 -m macpilot --db "$DB" undo 1
-python3 -m macpilot --db "$DB" undo 1 --apply
-```
-
-`move --apply` requires the source file to be indexed first. MacPilot records
-the original and destination paths, refuses to follow symlinks, and refuses to
-overwrite an existing path. Applied filesystem moves use a no-replace operation;
-if the database update fails, MacPilot attempts to restore the original path.
-It does not provide a delete command.
-
-### Install the package locally (optional)
+### Install or build the Python package
 
 Using `uv`:
 
 ```bash
 uv venv
 uv pip install -e .
+uv build --wheel
 ```
 
-Using a regular virtual environment:
+Using the standard library virtual-environment workflow:
 
 ```bash
 python3 -m venv .venv
@@ -102,19 +98,36 @@ python3 -m venv .venv
 python -m pip install -e .
 ```
 
-Build a wheel with:
+### Run the safe move flow
+
+Every mutating command is preview-only until `--apply` is supplied:
 
 ```bash
-uv build --wheel
+# Preview: the source file is not changed.
+python3 -m macpilot --db "$DB" move \
+  ~/Downloads/report.pdf ~/Documents/Reports/report.pdf
+
+# Apply only after reviewing the JSON preview.
+python3 -m macpilot --db "$DB" move \
+  ~/Downloads/report.pdf ~/Documents/Reports/report.pdf --apply
+
+# Inspect the action log.
+python3 -m macpilot --db "$DB" actions --active-only
+
+# Preview and then apply an undo.
+python3 -m macpilot --db "$DB" undo 1
+python3 -m macpilot --db "$DB" undo 1 --apply
 ```
 
-## Native SwiftUI demo
+Applied moves require the source to be indexed first. MacPilot refuses symlink paths, refuses to overwrite existing destinations, coordinates filesystem and SQLite updates, and attempts to restore the original path if recording the action fails. There is no delete command.
 
-Open `MacPilotDemo/MacPilotDemo.xcodeproj` in Xcode, select the shared
-`MacPilotDemo` scheme, and press **Run**. The demo uses sample data and is safe
-to explore.
+## Open the native demo
 
-A command-line build that does not require signing is:
+Requirements: macOS and Xcode 15 or newer.
+
+Open `MacPilotDemo/MacPilotDemo.xcodeproj` in Xcode, select the shared `MacPilotDemo` scheme, choose **My Mac**, and press **Run**.
+
+Or build without code signing from the repository root:
 
 ```bash
 xcodebuild \
@@ -124,10 +137,22 @@ xcodebuild \
   -sdk macosx \
   -derivedDataPath /tmp/MacPilotDerivedData \
   CODE_SIGNING_ALLOWED=NO build
+
+open /tmp/MacPilotDerivedData/Build/Products/Debug/MacPilotDemo.app
 ```
 
-The resulting app is at:
-`/tmp/MacPilotDerivedData/Build/Products/Debug/MacPilotDemo.app`.
+The demo is safe to explore because it uses sample data and does not access the real filesystem.
+
+## Safety model
+
+| Principle | Behavior |
+| --- | --- |
+| Local-first | No upload, telemetry, or network/API dependency in the Python core. |
+| Preview-first | Filesystem mutations return a preview until `--apply` is explicit. |
+| No symlink traversal | Symlink sources and destinations, including broken links, are rejected. |
+| No overwrite | Destination collisions are rejected, including a destination that appears during a move. |
+| Transactional recording | Filesystem and SQLite/action-log updates are coordinated with rollback handling. |
+| Undoable changes | Applied moves are recorded and can be inspected before undoing. |
 
 ## Project layout
 
@@ -135,17 +160,18 @@ The resulting app is at:
 macpilot/                 Python core and CLI
 tests/                    Standard-library unittest suite
 MacPilotDemo/             Native SwiftUI sample-data application
+docs/assets/              GitHub README artwork
 .github/workflows/        Python and macOS CI
 ```
 
-## Safety and privacy
+## Current scope
 
-- All indexing and search data stays in the local SQLite database.
-- No network/API dependency is used by the core.
-- Symlinks and common dependency directories are skipped during indexing.
-- Move and undo reject symlink paths and do not overwrite existing destinations.
-- File changes require an explicit `--apply` flag and are recorded for undo.
-- Review the JSON preview before applying a move.
+MacPilot is an MVP for local testing and product exploration, not a finished background file-management agent. The following are intentionally out of scope for this milestone:
 
-See `CONTRIBUTING.md` for the verification checklist used before publishing
-changes.
+- Semantic embeddings or automatic semantic classification.
+- Ollama integration.
+- A real-file SwiftUI bridge to the Python core.
+- Background file automation.
+- Signed and notarized distribution.
+
+Contributions that preserve the local-first, preview-first safety model are welcome. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the verification checklist and project expectations.
