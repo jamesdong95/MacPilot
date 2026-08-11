@@ -183,3 +183,7 @@ MacPilot is an MVP for local testing and product exploration, not a finished bac
 - Signed and notarized distribution.
 
 Contributions that preserve the local-first, preview-first safety model are welcome. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the verification checklist and project expectations.
+
+## Changelog
+
+See [`CHANGELOG.md`](CHANGELOG.md) for the version history.

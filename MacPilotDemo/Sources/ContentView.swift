@@ -28,7 +28,7 @@ private struct SidebarView: View {
     @EnvironmentObject private var store: DemoStore
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 22) {
+        VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 4) {
                 Label("MacPilot", systemImage: "sparkle.magnifyingglass")
                     .font(.system(size: 22, weight: .bold, design: .rounded))
@@ -37,6 +37,8 @@ private struct SidebarView: View {
                     .foregroundStyle(.secondary)
             }
             .padding(.horizontal, 14)
+            .padding(.top, 20)
+            .padding(.bottom, 14)
 
             List(selection: $store.selectedSection) {
                 Section("Workspace") {
@@ -58,41 +60,43 @@ private struct SidebarView: View {
                 }
             }
             .listStyle(.sidebar)
-
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 8) {
-                    Image(systemName: "folder")
-                        .foregroundStyle(.tint)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(store.workspaceName)
-                            .font(.callout.weight(.semibold))
-                            .lineLimit(1)
-                        Text(store.hasCore ? "Python core connected" : "Python core unavailable")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                }
-                Button("Choose folder…") { store.chooseWorkspace() }
-                    .buttonStyle(.bordered)
-                    .disabled(!store.hasCore || store.isBusy)
-            }
-            .padding(.horizontal, 14)
-
-            VStack(alignment: .leading, spacing: 10) {
-                Label("Privacy protected", systemImage: "lock.shield.fill")
-                    .font(.callout.weight(.semibold))
-                    .foregroundStyle(.green)
-                Text("Search and previews stay local. File changes are not enabled in this read-only slice.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .padding(14)
-            .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 12))
-            .padding(12)
         }
-        .padding(.top, 20)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "folder")
+                            .foregroundStyle(.tint)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(store.workspaceName)
+                                .font(.callout.weight(.semibold))
+                                .lineLimit(1)
+                            Text(store.hasCore ? "Python core connected" : "Python core unavailable")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                    }
+                    Button("Choose folder…") { store.chooseWorkspace() }
+                        .buttonStyle(.bordered)
+                        .disabled(!store.hasCore || store.isBusy)
+                }
+
+                VStack(alignment: .leading, spacing: 10) {
+                    Label("Privacy protected", systemImage: "lock.shield.fill")
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(.green)
+                    Text("Search and previews stay local. File changes are not enabled in this read-only slice.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(14)
+                .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 12))
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 12)
+        }
     }
 }
 
