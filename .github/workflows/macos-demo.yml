@@ -1,0 +1,28 @@
+name: macOS SwiftUI demo
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Show Xcode version
+        run: xcodebuild -version
+      - name: Build unsigned demo
+        run: |
+          xcodebuild \
+            -project MacPilotDemo/MacPilotDemo.xcodeproj \
+            -scheme MacPilotDemo \
+            -configuration Debug \
+            -sdk macosx \
+            -derivedDataPath "$RUNNER_TEMP/MacPilotDerivedData" \
+            CODE_SIGNING_ALLOWED=NO \
+            build

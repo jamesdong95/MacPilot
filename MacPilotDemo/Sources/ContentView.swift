@@ -200,7 +200,7 @@ private struct ActivityView: View {
                         HStack(spacing: 14) {
                             Image(systemName: action.isUndone ? "arrow.uturn.backward.circle" : "checkmark.circle.fill")
                                 .font(.title3)
-                                .foregroundStyle(action.isUndone ? .secondary : .green)
+                                .foregroundStyle(action.isUndone ? Color.secondary : Color.green)
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(action.action)
                                     .font(.headline)
@@ -277,7 +277,7 @@ private struct FileRow: View {
             HStack(spacing: 12) {
                 Image(systemName: file.icon)
                     .font(.title3)
-                    .foregroundStyle(selected ? .tint : .secondary)
+                    .foregroundStyle(selected ? Color.accentColor : Color.secondary)
                     .frame(width: 30, height: 30)
                     .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
                 VStack(alignment: .leading, spacing: 4) {
@@ -376,7 +376,7 @@ private struct SuggestionCard: View {
         HStack(alignment: .top, spacing: 16) {
             Image(systemName: suggestion.isApplied ? "checkmark.seal.fill" : "sparkles")
                 .font(.title2)
-                .foregroundStyle(suggestion.isApplied ? .green : .tint)
+                .foregroundStyle(suggestion.isApplied ? Color.green : Color.accentColor)
                 .frame(width: 38, height: 38)
                 .background(.quaternary, in: RoundedRectangle(cornerRadius: 10))
             VStack(alignment: .leading, spacing: 8) {

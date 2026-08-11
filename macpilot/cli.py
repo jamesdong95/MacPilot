@@ -6,10 +6,10 @@ import sys
 from dataclasses import asdict
 from pathlib import Path
 
+from . import __version__
 from .database import Database
 from .indexer import Indexer
-from .models import MoveResult, SearchResult, Suggestion
-from .organizer import apply_move, preview_move, suggest, undo
+from .organizer import apply_move, preview_move, suggest, undo_action
 from .search import search
 
 
@@ -36,6 +36,7 @@ def build_parser() -> argparse.ArgumentParser:
         prog="macpilot",
         description="Local-first file search and safe organization for macOS.",
     )
+    parser.add_argument("--version", action="version", version=__version__)
     parser.add_argument(
         "--db",
         type=_path,
@@ -65,6 +66,20 @@ def build_parser() -> argparse.ArgumentParser:
 
     undo_parser = commands.add_parser("undo", help="Undo a completed move")
     undo_parser.add_argument("action_id", type=int)
+    undo_parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="Actually undo the move; without this flag only a preview is produced",
+    )
+
+    actions_parser = commands.add_parser("actions", help="List recorded file actions")
+    actions_parser.add_argument(
+        "--active-only",
+        action="store_true",
+        help="Only show actions that have not been undone",
+    )
+
+    commands.add_parser("status", help="Show database and action summary")
     return parser
 
 
@@ -88,7 +103,19 @@ def main(argv: list[str] | None = None) -> int:
                 payload["mode"] = "applied" if args.apply else "preview"
                 _print(payload)
             elif args.command == "undo":
-                _print(asdict(undo(database, args.action_id)))
+                result = undo_action(database, args.action_id, apply=args.apply)
+                payload = asdict(result)
+                payload["mode"] = "applied" if args.apply else "preview"
+                _print(payload)
+            elif args.command == "actions":
+                _print(
+                    [
+                        dict(row)
+                        for row in database.list_actions(active_only=args.active_only)
+                    ]
+                )
+            elif args.command == "status":
+                _print(database.status_counts())
         return 0
     except (OSError, ValueError) as exc:
         print(f"macpilot: {exc}", file=sys.stderr)
