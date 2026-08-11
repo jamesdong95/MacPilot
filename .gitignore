@@ -10,3 +10,7 @@ tests/.runtime/
 build/
 dist/
 *.egg-info/
+DerivedData/
+xcuserdata/
+*.xcuserstate
+.build/
