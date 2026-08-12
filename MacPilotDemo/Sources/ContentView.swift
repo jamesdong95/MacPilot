@@ -60,8 +60,8 @@ private struct SidebarView: View {
                 }
             }
             .listStyle(.sidebar)
-        }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
+            .layoutPriority(1)
+
             VStack(alignment: .leading, spacing: 12) {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack(spacing: 8) {
@@ -210,6 +210,7 @@ private struct SearchView: View {
 
 private struct SuggestionsView: View {
     @EnvironmentObject private var store: DemoStore
+    @State private var suggestionToApply: DemoSuggestion?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
@@ -222,9 +223,11 @@ private struct SuggestionsView: View {
             ScrollView {
                 LazyVStack(spacing: 14) {
                     ForEach(store.suggestions) { suggestion in
-                        SuggestionCard(suggestion: suggestion) {
-                            store.preview(suggestion)
-                        }
+                        SuggestionCard(
+                            suggestion: suggestion,
+                            preview: { store.preview(suggestion) },
+                            apply: { suggestionToApply = suggestion }
+                        )
                     }
                     if store.suggestions.isEmpty {
                         Text("Index a folder to generate local suggestions.")
@@ -236,18 +239,39 @@ private struct SuggestionsView: View {
             }
         }
         .padding(30)
+        .confirmationDialog(
+            "Apply \(suggestionToApply?.files.count ?? 0) move(s)?",
+            isPresented: Binding(
+                get: { suggestionToApply != nil },
+                set: { if !$0 { suggestionToApply = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Apply Moves") {
+                if let suggestion = suggestionToApply {
+                    store.apply(suggestion)
+                }
+                suggestionToApply = nil
+            }
+            Button("Cancel", role: .cancel) {
+                suggestionToApply = nil
+            }
+        } message: {
+            Text("Files move into a new folder on your disk. Each move is recorded and can be undone from Activity.")
+        }
     }
 }
 
 private struct ActivityView: View {
     @EnvironmentObject private var store: DemoStore
+    @State private var actionToUndo: ActivityEntry?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
             PageHeader(
                 eyebrow: "AUDIT TRAIL",
                 title: "Local activity, clearly recorded.",
-                subtitle: "Existing action records are shown for audit. This client does not apply or undo filesystem changes."
+                subtitle: "Every applied move is recorded. Undo restores the file to its original location."
             )
 
             ScrollView {
@@ -269,14 +293,13 @@ private struct ActivityView: View {
                                 Text(action.date)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
-                                if !action.isUndone {
-                                    Text("Read-only")
-                                        .font(.caption.weight(.semibold))
-                                        .foregroundStyle(.secondary)
-                                } else {
+                                if action.isUndone {
                                     Text("Undone")
                                         .font(.caption.weight(.semibold))
                                         .foregroundStyle(.secondary)
+                                } else {
+                                    Button("Undo") { actionToUndo = action }
+                                        .buttonStyle(.bordered)
                                 }
                             }
                         }
@@ -293,6 +316,26 @@ private struct ActivityView: View {
             }
         }
         .padding(30)
+        .confirmationDialog(
+            "Undo this move?",
+            isPresented: Binding(
+                get: { actionToUndo != nil },
+                set: { if !$0 { actionToUndo = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Undo Move", role: .destructive) {
+                if let action = actionToUndo {
+                    store.undo(action)
+                }
+                actionToUndo = nil
+            }
+            Button("Cancel", role: .cancel) {
+                actionToUndo = nil
+            }
+        } message: {
+            Text("The file will be moved back to its original location. The action is recorded as undone.")
+        }
     }
 }
 
@@ -457,7 +500,8 @@ private struct EmptyWorkspaceCard: View {
 
 private struct SuggestionCard: View {
     let suggestion: DemoSuggestion
-    let action: () -> Void
+    let preview: () -> Void
+    let apply: () -> Void
 
     var body: some View {
         HStack(alignment: .top, spacing: 16) {
@@ -481,11 +525,16 @@ private struct SuggestionCard: View {
             }
             Spacer()
             if suggestion.isPreviewed {
-                Text("Previewed")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.green)
+                HStack(spacing: 8) {
+                    Text("Previewed")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.green)
+                    Button("Apply") { apply() }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.orange)
+                }
             } else {
-                Button("Preview") { action() }
+                Button("Preview") { preview() }
                     .buttonStyle(.borderedProminent)
             }
         }

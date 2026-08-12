@@ -138,6 +138,36 @@ class CliTests(unittest.TestCase):
         self.assertEqual(exit_code, 0, error)
         self.assertEqual(actions_payload, [])
 
+    def test_applied_payloads_have_stable_shapes(self) -> None:
+        source = self.workspace / "invoice.txt"
+        destination = self.workspace / "Organized" / "invoice.txt"
+        source.write_text("invoice body", encoding="utf-8")
+
+        exit_code, _, error = self.run_cli("index", str(self.workspace))
+        self.assertEqual(exit_code, 0, error)
+
+        exit_code, move_payload, error = self.run_cli(
+            "move", str(source), str(destination), "--apply"
+        )
+        self.assertEqual(exit_code, 0, error)
+        self.assertEqual(
+            set(move_payload),
+            {"applied", "action_id", "source_path", "destination_path", "mode"},
+        )
+        self.assertEqual(move_payload["mode"], "applied")
+        self.assertIs(move_payload["applied"], True)
+        self.assertGreater(move_payload["action_id"], 0)
+        action_id = move_payload["action_id"]
+
+        exit_code, undo_payload, error = self.run_cli("undo", str(action_id), "--apply")
+        self.assertEqual(exit_code, 0, error)
+        self.assertEqual(
+            set(undo_payload),
+            {"applied", "action_id", "source_path", "destination_path", "mode"},
+        )
+        self.assertEqual(undo_payload["mode"], "applied")
+        self.assertIs(undo_payload["applied"], True)
+
     def test_search_rejects_non_positive_limit(self) -> None:
         exit_code, payload, error = self.run_cli("search", "report", "--limit", "0")
         self.assertEqual(exit_code, 2)

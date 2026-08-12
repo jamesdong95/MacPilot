@@ -90,6 +90,15 @@ struct CoreMovePreview: Decodable {
 }
 
 
+struct CoreMoveOutcome: Decodable {
+    let applied: Bool
+    let actionId: Int?
+    let sourcePath: String
+    let destinationPath: String
+    let mode: String
+}
+
+
 struct MacPilotClient {
     private static let defaultTimeout: TimeInterval = 30
     private static let maximumTimeout: TimeInterval = 300
@@ -241,6 +250,22 @@ struct MacPilotClient {
             CoreMovePreview.self,
             command: ["move", source, destination],
             label: "move preview"
+        )
+    }
+
+    func applyMove(source: String, destination: String) async throws -> CoreMoveOutcome {
+        try await runAndDecode(
+            CoreMoveOutcome.self,
+            command: ["move", source, destination, "--apply"],
+            label: "move apply"
+        )
+    }
+
+    func undo(actionID: Int) async throws -> CoreMoveOutcome {
+        try await runAndDecode(
+            CoreMoveOutcome.self,
+            command: ["undo", String(actionID), "--apply"],
+            label: "undo apply"
         )
     }
 

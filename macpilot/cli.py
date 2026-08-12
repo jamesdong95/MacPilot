@@ -107,17 +107,29 @@ def main(argv: list[str] | None = None) -> int:
             elif args.command == "suggest":
                 _print([asdict(item) for item in suggest(database, args.root)])
             elif args.command == "move":
-                result = (
-                    apply_move(database, args.source, args.destination)
-                    if args.apply
-                    else preview_move(args.source, args.destination)
-                )
-                payload = asdict(result)
+                if args.apply:
+                    result = apply_move(database, args.source, args.destination)
+                    payload = {
+                        "applied": True,
+                        "action_id": result.action_id,
+                        "source_path": str(result.source),
+                        "destination_path": str(result.destination),
+                    }
+                else:
+                    payload = asdict(preview_move(args.source, args.destination))
                 payload["mode"] = "applied" if args.apply else "preview"
                 _print(payload)
             elif args.command == "undo":
                 result = undo_action(database, args.action_id, apply=args.apply)
-                payload = asdict(result)
+                if args.apply:
+                    payload = {
+                        "applied": True,
+                        "action_id": result.action_id,
+                        "source_path": str(result.source_path),
+                        "destination_path": str(result.destination_path),
+                    }
+                else:
+                    payload = asdict(result)
                 payload["mode"] = "applied" if args.apply else "preview"
                 _print(payload)
             elif args.command == "actions":

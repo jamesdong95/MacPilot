@@ -43,7 +43,7 @@ Most file automation tools optimize for speed first. MacPilot optimizes for **co
 - Preview, apply, inspect, and undo file moves.
 - Inspect current index and action-log state with `status` and `actions`.
 
-### Native SwiftUI read-only client
+### Native SwiftUI client
 
 The repository also contains a macOS SwiftUI client connected to the local Python core:
 
@@ -51,11 +51,20 @@ The repository also contains a macOS SwiftUI client connected to the local Pytho
 - Search real filenames, paths, and indexed text content.
 - Inspect real file metadata and snippets.
 - Review deterministic organization suggestions.
-- Request move previews without passing `--apply`.
-- Read the local action log without enabling apply or undo from the UI.
+- Preview every move before anything changes on disk.
+- Apply moves with an explicit confirmation dialog; each move is recorded
+  in the local action log and can be undone from Activity.
+- Undo a recorded move from Activity with confirmation; the file is restored
+  to its original location.
 - Keep all core calls local with no upload or network dependency.
 
-The native client is intentionally **read-only in this milestone**. It never passes `--apply`, never deletes files, and does not expose undo execution yet. To let the client find the Python core during development, set `MACPILOT_PROJECT_ROOT` in the Xcode scheme, install the `macpilot` command on `PATH`, or set `MACPILOT_CLI` to an executable path. `MACPILOT_DB` can point to an isolated SQLite database for testing.
+Every filesystem mutation is preview-first and confirm-first: the client never
+passes `--apply` without an explicit confirmation, never deletes files, and the
+Python core coordinates filesystem and SQLite updates with rollback handling.
+To let the client find the Python core during development, set
+`MACPILOT_PROJECT_ROOT` in the Xcode scheme, install the `macpilot` command on
+`PATH`, or set `MACPILOT_CLI` to an executable path. `MACPILOT_DB` can point to
+an isolated SQLite database for testing.
 
 ## Quick start
 
@@ -149,7 +158,7 @@ xcodebuild \
 open /tmp/MacPilotDerivedData/Build/Products/Debug/MacPilotDemo.app
 ```
 
-The client asks you to choose a folder before indexing. Indexing, search, suggestions, and move previews use the real local filesystem and SQLite index, but the UI does not enable filesystem mutations in this milestone.
+The client asks you to choose a folder before indexing. Indexing, search, suggestions, move previews, confirmed applies, and confirmed undos use the real local filesystem and SQLite index. Applied moves are recorded in the action log and can be undone from Activity.
 
 ## Safety model
 
@@ -179,7 +188,6 @@ MacPilot is an MVP for local testing and product exploration, not a finished bac
 - Semantic embeddings or automatic semantic classification.
 - Ollama integration.
 - Background file automation.
-- Apply/undo controls in the native UI.
 - Signed and notarized distribution.
 
 Contributions that preserve the local-first, preview-first safety model are welcome. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the verification checklist and project expectations.

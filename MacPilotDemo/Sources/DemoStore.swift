@@ -174,12 +174,100 @@ final class DemoStore: ObservableObject {
         }
     }
 
-    func undo(_ action: ActivityEntry) {
-        guard action.coreActionID != nil else {
-            statusMessage = "Undo is available after a real apply, not in read-only mode"
+    func apply(_ suggestion: DemoSuggestion) {
+        guard let client else {
+            statusMessage = "Local core unavailable · apply could not run"
             return
         }
-        statusMessage = "Undo is intentionally disabled until the apply flow is enabled"
+        guard !isBusy else { return }
+        guard workspacePath != nil else {
+            statusMessage = "Choose a folder before applying moves"
+            return
+        }
+        guard !suggestion.sourcePaths.isEmpty else {
+            statusMessage = "Nothing to apply for this suggestion"
+            return
+        }
+
+        operationTask?.cancel()
+        isBusy = true
+        statusMessage = "Applying \(suggestion.sourcePaths.count) move(s)…"
+        let sources = suggestion.sourcePaths
+        let destination = suggestion.destination
+
+        operationTask = Task { [weak self] in
+            do {
+                var appliedCount = 0
+                for source in sources {
+                    guard !Task.isCancelled else { return }
+                    let filename = URL(fileURLWithPath: source).lastPathComponent
+                    let destinationPath = URL(fileURLWithPath: destination, isDirectory: true)
+                        .appendingPathComponent(filename)
+                        .path
+                    let outcome = try await client.applyMove(
+                        source: source,
+                        destination: destinationPath
+                    )
+                    guard outcome.applied else {
+                        throw MacPilotClientError.commandFailed(
+                            command: "move apply",
+                            message: "The core did not confirm the move",
+                            status: -1
+                        )
+                    }
+                    appliedCount += 1
+                }
+                guard !Task.isCancelled else { return }
+                try await self?.refreshAfterMutation()
+                guard !Task.isCancelled else { return }
+                self?.isBusy = false
+                self?.statusMessage =
+                    "Applied \(appliedCount) move(s) · undo is available in Activity · local only"
+            } catch {
+                guard !Task.isCancelled else { return }
+                self?.isBusy = false
+                self?.statusMessage = Self.errorMessage(error)
+            }
+        }
+    }
+
+    func undo(_ action: ActivityEntry) {
+        guard !action.isUndone else { return }
+        guard let actionID = action.coreActionID else {
+            statusMessage = "This activity record has no core action to undo"
+            return
+        }
+        guard let client else {
+            statusMessage = "Local core unavailable · undo could not run"
+            return
+        }
+        guard !isBusy else { return }
+
+        operationTask?.cancel()
+        isBusy = true
+        statusMessage = "Undoing move #\(actionID)…"
+        operationTask = Task { [weak self] in
+            do {
+                let outcome = try await client.undo(actionID: actionID)
+                guard outcome.applied else {
+                    throw MacPilotClientError.commandFailed(
+                        command: "undo apply",
+                        message: "The core did not confirm the undo",
+                        status: -1
+                    )
+                }
+                guard !Task.isCancelled else { return }
+                try await self?.refreshAfterMutation()
+                guard !Task.isCancelled else { return }
+                self?.isBusy = false
+                self?.statusMessage =
+                    "Move undone · file restored to its original location · local only"
+            } catch {
+                guard !Task.isCancelled else { return }
+                self?.isBusy = false
+                self?.statusMessage = Self.errorMessage(error)
+            }
+        }
     }
 
     private func scheduleSearch() {
@@ -237,6 +325,26 @@ final class DemoStore: ObservableObject {
         if url.startAccessingSecurityScopedResource() {
             securityScopedWorkspaceURL = url
         }
+    }
+
+    private func refreshAfterMutation() async throws {
+        guard let client, let workspacePath else { return }
+        let root = URL(fileURLWithPath: workspacePath)
+        let indexedFiles = try await client.list(root: root)
+        let coreSuggestions = try await client.suggestions(root: root)
+        let coreActions = try await client.actions()
+        let coreStatus = try await client.status()
+        files = indexedFiles.map(Self.makeFile)
+        suggestions = coreSuggestions.map(Self.makeSuggestion)
+        actions = coreActions.map(Self.makeActivity)
+        self.coreStatus = coreStatus
+        let term = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        if term.isEmpty {
+            searchResults = []
+        } else {
+            searchResults = try await client.search(query: term).map(Self.makeFile)
+        }
+        selectedFile = nil
     }
 
     private static func makeFile(_ result: CoreSearchResult) -> DemoFile {
