@@ -26,3 +26,13 @@ jobs:
             -derivedDataPath "$RUNNER_TEMP/MacPilotDerivedData" \
             CODE_SIGNING_ALLOWED=NO \
             build
+      - name: Compile bridge harness
+        run: |
+          swiftc -O \
+            MacPilotDemo/Sources/MacPilotClient.swift \
+            MacPilotDemo/Tests/BridgeHarness/main.swift \
+            -o "$RUNNER_TEMP/macpilot-bridge-harness"
+      - name: Run bridge harness
+        run: |
+          MACPILOT_PROJECT_ROOT="$GITHUB_WORKSPACE" \
+            "$RUNNER_TEMP/macpilot-bridge-harness"

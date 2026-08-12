@@ -97,6 +97,7 @@ private struct SidebarView: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 12)
         }
+        .navigationSplitViewColumnWidth(min: 190, ideal: 220, max: 280)
     }
 }
 
@@ -148,10 +149,11 @@ private struct SearchView: View {
                 FilterPill(title: "All files", active: true)
                 FilterPill(title: "Content")
                 FilterPill(title: "Recently changed")
-                Spacer()
+                Spacer(minLength: 8)
                 Label("Local only", systemImage: "checkmark.shield")
                     .font(.caption.weight(.medium))
                     .foregroundStyle(.green)
+                    .lineLimit(1)
             }
 
             if store.workspacePath == nil {
@@ -185,7 +187,7 @@ private struct SearchView: View {
                         }
                     }
                 }
-                .frame(minWidth: 460, maxWidth: .infinity, alignment: .leading)
+                .frame(minWidth: 300, maxWidth: .infinity, alignment: .leading)
 
                 Divider()
 
@@ -196,7 +198,7 @@ private struct SearchView: View {
                         EmptyInspector()
                     }
                 }
-                .frame(width: 290)
+                .frame(minWidth: 240, idealWidth: 290)
             }
             .frame(maxHeight: .infinity)
 
