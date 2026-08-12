@@ -10,6 +10,7 @@ struct MacPilotDemoApp: App {
             ContentView()
                 .environmentObject(store)
         }
+        .defaultPosition(.center)
         .windowResizability(.contentSize)
     }
 }

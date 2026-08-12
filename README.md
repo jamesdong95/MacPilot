@@ -1,7 +1,7 @@
 # MacPilot
 
 <p align="center">
-  <img src="docs/assets/macpilot-github-hero.png" alt="MacPilot dark macOS workspace with local file search, safe organization cards, a privacy shield, and a no-cloud workflow" width="100%" />
+  <img src="docs/assets/macpilot-github-hero.png" alt="MacPilot dark macOS workspace with local file search, safe organization cards with preview and apply buttons, a privacy shield, and a no-cloud workflow" width="100%" />
 </p>
 
 <p align="center">

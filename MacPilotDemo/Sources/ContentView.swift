@@ -18,9 +18,9 @@ struct ContentView: View {
                     ActivityView()
                 }
             }
-            .frame(minWidth: 820, minHeight: 640)
+            .frame(minWidth: 760, minHeight: 560)
         }
-        .frame(minWidth: 1080, minHeight: 720)
+        .frame(minWidth: 960, minHeight: 640)
     }
 }
 
