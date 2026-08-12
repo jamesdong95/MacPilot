@@ -57,6 +57,9 @@ The repository also contains a macOS SwiftUI client connected to the local Pytho
   in the local action log and can be undone from Activity.
 - Undo a recorded move from Activity with confirmation; the file is restored
   to its original location.
+- Responsive window: opens compact and centered (960x640), clamps to the
+  visible screen on resize, and every pane (sidebar, results, inspector,
+  filter row) adapts down to the minimum size without clipping.
 - Keep all core calls local with no upload or network dependency.
 
 Every filesystem mutation is preview-first and confirm-first: the client never

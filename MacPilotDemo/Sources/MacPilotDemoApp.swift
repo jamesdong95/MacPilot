@@ -11,6 +11,7 @@ struct MacPilotDemoApp: App {
                 .environmentObject(store)
         }
         .defaultPosition(.center)
+        .defaultSize(width: 960, height: 640)
         .windowResizability(.contentSize)
     }
 }

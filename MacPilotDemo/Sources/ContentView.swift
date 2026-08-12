@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 
 struct ContentView: View {
@@ -20,7 +21,91 @@ struct ContentView: View {
             }
             .frame(minWidth: 760, minHeight: 560)
         }
-        .frame(minWidth: 960, minHeight: 640)
+        // Window titlebars overlap the split view at compact sizes on macOS;
+        // reserve that inset inside the fixed window content size.
+        .padding(.top, 34)
+        .frame(
+            minWidth: 960,
+            maxWidth: .infinity,
+            minHeight: 640,
+            maxHeight: .infinity,
+            alignment: .topLeading
+        )
+        .onAppear {
+            fitWindowToScreen()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResizeNotification)) { _ in
+            clampWindowToScreen()
+        }
+    }
+
+    /// Open the window at a compact, screen-safe size and center it so the app
+    /// never starts larger than the display (small screens / VDI viewports).
+    private func fitWindowToScreen() {
+        DispatchQueue.main.async {
+            guard let window = NSApp.windows.first(where: { $0.isVisible || $0.isKeyWindow }) ?? NSApp.windows.first,
+                  let screen = window.screen ?? NSScreen.main else {
+                return
+            }
+            let visible = screen.visibleFrame
+            let currentContentRect = window.contentRect(forFrameRect: window.frame)
+            let frameInsets = CGSize(
+                width: window.frame.width - currentContentRect.width,
+                height: window.frame.height - currentContentRect.height
+            )
+            let targetContentWidth = min(960.0, max(0, visible.width - frameInsets.width))
+            let targetContentHeight = min(640.0, max(0, visible.height - frameInsets.height))
+            let contentRect = NSRect(
+                origin: .zero,
+                size: CGSize(width: targetContentWidth, height: targetContentHeight)
+            )
+            var targetFrame = window.frameRect(forContentRect: contentRect)
+            targetFrame.origin.x = visible.minX + max(0, (visible.width - targetFrame.width) / 2)
+            targetFrame.origin.y = visible.minY + max(0, (visible.height - targetFrame.height) / 2)
+
+            window.setFrame(targetFrame, display: true)
+            clampWindowToScreen(window)
+        }
+    }
+
+    /// Clamp window size and origin so the window frame never exceeds the screen's visible frame.
+    private func clampWindowToScreen(_ targetWindow: NSWindow? = nil) {
+        guard let window = targetWindow ?? NSApp.windows.first(where: { $0.isVisible || $0.isKeyWindow }) ?? NSApp.windows.first,
+              let screen = window.screen ?? NSScreen.main else {
+            return
+        }
+        let visible = screen.visibleFrame
+        var frame = window.frame
+        var changed = false
+
+        if frame.width > visible.width {
+            frame.size.width = visible.width
+            changed = true
+        }
+        if frame.height > visible.height {
+            frame.size.height = visible.height
+            changed = true
+        }
+        if frame.maxY > visible.maxY {
+            frame.origin.y = visible.maxY - frame.height
+            changed = true
+        }
+        if frame.minY < visible.minY {
+            frame.origin.y = visible.minY
+            changed = true
+        }
+        if frame.maxX > visible.maxX {
+            frame.origin.x = visible.maxX - frame.width
+            changed = true
+        }
+        if frame.minX < visible.minX {
+            frame.origin.x = visible.minX
+            changed = true
+        }
+
+        if changed {
+            window.setFrame(frame, display: true)
+        }
     }
 }
 
@@ -29,16 +114,19 @@ private struct SidebarView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 2) {
                 Label("MacPilot", systemImage: "sparkle.magnifyingglass")
-                    .font(.system(size: 22, weight: .bold, design: .rounded))
+                    .font(.system(size: 20, weight: .bold, design: .rounded))
+                    .lineLimit(1)
                 Text("Local-first file intelligence")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
             }
             .padding(.horizontal, 14)
-            .padding(.top, 20)
-            .padding(.bottom, 14)
+            .padding(.top, 14)
+            .padding(.bottom, 8)
 
             List(selection: $store.selectedSection) {
                 Section("Workspace") {
@@ -46,56 +134,61 @@ private struct SidebarView: View {
                         Label {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(section.title)
+                                    .lineLimit(1)
                                 Text(section.subtitle)
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)
+                                    .lineLimit(1)
                             }
                         } icon: {
                             Image(systemName: section.icon)
                                 .frame(width: 20)
                         }
                         .tag(section)
-                        .padding(.vertical, 4)
+                        .padding(.vertical, 3)
                     }
                 }
             }
             .listStyle(.sidebar)
             .layoutPriority(1)
 
-            VStack(alignment: .leading, spacing: 12) {
-                VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 8) {
                         Image(systemName: "folder")
                             .foregroundStyle(.tint)
-                        VStack(alignment: .leading, spacing: 2) {
+                        VStack(alignment: .leading, spacing: 1) {
                             Text(store.workspaceName)
                                 .font(.callout.weight(.semibold))
                                 .lineLimit(1)
                             Text(store.hasCore ? "Python core connected" : "Python core unavailable")
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
+                                .lineLimit(1)
                         }
                         Spacer()
                     }
                     Button("Choose folder…") { store.chooseWorkspace() }
                         .buttonStyle(.bordered)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         .disabled(!store.hasCore || store.isBusy)
                 }
 
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: 6) {
                     Label("Privacy protected", systemImage: "lock.shield.fill")
                         .font(.callout.weight(.semibold))
                         .foregroundStyle(.green)
-                    Text("Search and previews stay local. File changes are not enabled in this read-only slice.")
+                        .lineLimit(1)
+                    Text("Search and previews stay local. File changes require explicit confirmation.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                .padding(14)
-                .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 12))
+                .padding(10)
+                .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 10))
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 12)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
         }
         .navigationSplitViewColumnWidth(min: 190, ideal: 220, max: 280)
     }
@@ -105,14 +198,15 @@ private struct SearchView: View {
     @EnvironmentObject private var store: DemoStore
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: 12) {
             PageHeader(
                 eyebrow: "FILE SEARCH",
                 title: "Find anything, locally.",
                 subtitle: "Search names, paths and extracted content without uploading your files."
             )
+            .layoutPriority(1)
 
-            HStack(spacing: 10) {
+            HStack(spacing: 8) {
                 Label(store.workspaceName, systemImage: "folder.fill")
                     .font(.callout.weight(.medium))
                     .foregroundStyle(.secondary)
@@ -126,6 +220,7 @@ private struct SearchView: View {
                     .buttonStyle(.bordered)
                     .disabled(!store.hasCore || store.isBusy)
             }
+            .layoutPriority(1)
 
             HStack(spacing: 10) {
                 Image(systemName: "magnifyingglass")
@@ -142,26 +237,34 @@ private struct SearchView: View {
                     .buttonStyle(.plain)
                 }
             }
-            .padding(14)
+            .padding(10)
             .background(.quaternary.opacity(0.7), in: RoundedRectangle(cornerRadius: 12))
+            .layoutPriority(1)
 
             HStack(spacing: 8) {
-                FilterPill(title: "All files", active: true)
-                FilterPill(title: "Content")
-                FilterPill(title: "Recently changed")
-                Spacer(minLength: 8)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        FilterPill(title: "All files", active: true)
+                        FilterPill(title: "Content")
+                        FilterPill(title: "Recently changed")
+                    }
+                }
+                Spacer(minLength: 2)
                 Label("Local only", systemImage: "checkmark.shield")
                     .font(.caption.weight(.medium))
                     .foregroundStyle(.green)
                     .lineLimit(1)
+                    .fixedSize()
             }
+            .layoutPriority(1)
 
             if store.workspacePath == nil {
                 EmptyWorkspaceCard { store.chooseWorkspace() }
+                    .layoutPriority(1)
             }
 
-            HStack(alignment: .top, spacing: 18) {
-                VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 8) {
+                VStack(alignment: .leading, spacing: 8) {
                     HStack {
                         Text("Results")
                             .font(.headline)
@@ -172,7 +275,7 @@ private struct SearchView: View {
                     }
 
                     ScrollView {
-                        LazyVStack(spacing: 8) {
+                        LazyVStack(spacing: 6) {
                             ForEach(store.filteredFiles) { file in
                                 FileRow(file: file, selected: store.selectedFile?.id == file.id) {
                                     store.selectedFile = file
@@ -182,12 +285,12 @@ private struct SearchView: View {
                                 Text(store.query.isEmpty ? "No indexed files yet." : "No matching files.")
                                     .font(.callout)
                                     .foregroundStyle(.secondary)
-                                    .frame(maxWidth: .infinity, minHeight: 100)
+                                    .frame(maxWidth: .infinity, minHeight: 80)
                             }
                         }
                     }
                 }
-                .frame(minWidth: 300, maxWidth: .infinity, alignment: .leading)
+                .frame(minWidth: 180, maxWidth: .infinity, alignment: .leading)
 
                 Divider()
 
@@ -198,15 +301,26 @@ private struct SearchView: View {
                         EmptyInspector()
                     }
                 }
-                .frame(minWidth: 240, idealWidth: 290)
+                .frame(
+                    minWidth: 160,
+                    idealWidth: 210,
+                    maxWidth: 250,
+                    minHeight: 110,
+                    maxHeight: .infinity,
+                    alignment: .topLeading
+                )
             }
-            .frame(maxHeight: .infinity)
+            .frame(minHeight: 120, maxHeight: .infinity)
+            .layoutPriority(0)
 
             Text(store.statusMessage)
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .lineLimit(1)
         }
-        .padding(30)
+        // Leave enough room for the 760pt detail minimum beside the sidebar
+        // when the window is at its 960pt minimum.
+        .padding(12)
     }
 }
 
@@ -215,7 +329,7 @@ private struct SuggestionsView: View {
     @State private var suggestionToApply: DemoSuggestion?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 24) {
+        VStack(alignment: .leading, spacing: 14) {
             PageHeader(
                 eyebrow: "SAFE ORGANIZATION",
                 title: "Suggestions, not surprises.",
@@ -223,7 +337,7 @@ private struct SuggestionsView: View {
             )
 
             ScrollView {
-                LazyVStack(spacing: 14) {
+                LazyVStack(spacing: 12) {
                     ForEach(store.suggestions) { suggestion in
                         SuggestionCard(
                             suggestion: suggestion,
@@ -235,12 +349,12 @@ private struct SuggestionsView: View {
                         Text("Index a folder to generate local suggestions.")
                             .font(.callout)
                             .foregroundStyle(.secondary)
-                            .frame(maxWidth: .infinity, minHeight: 100)
+                            .frame(maxWidth: .infinity, minHeight: 80)
                     }
                 }
             }
         }
-        .padding(30)
+        .padding(18)
         .confirmationDialog(
             "Apply \(suggestionToApply?.files.count ?? 0) move(s)?",
             isPresented: Binding(
@@ -269,7 +383,7 @@ private struct ActivityView: View {
     @State private var actionToUndo: ActivityEntry?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 24) {
+        VStack(alignment: .leading, spacing: 14) {
             PageHeader(
                 eyebrow: "AUDIT TRAIL",
                 title: "Local activity, clearly recorded.",
@@ -279,45 +393,50 @@ private struct ActivityView: View {
             ScrollView {
                 LazyVStack(spacing: 10) {
                     ForEach(store.actions) { action in
-                        HStack(spacing: 14) {
+                        HStack(spacing: 12) {
                             Image(systemName: action.isUndone ? "arrow.uturn.backward.circle" : "checkmark.circle.fill")
                                 .font(.title3)
                                 .foregroundStyle(action.isUndone ? Color.secondary : Color.green)
-                            VStack(alignment: .leading, spacing: 4) {
+                            VStack(alignment: .leading, spacing: 3) {
                                 Text(action.action)
                                     .font(.headline)
+                                    .lineLimit(1)
                                 Text(action.detail)
                                     .font(.callout)
                                     .foregroundStyle(.secondary)
+                                    .lineLimit(2)
                             }
-                            Spacer()
-                            VStack(alignment: .trailing, spacing: 6) {
+                            Spacer(minLength: 8)
+                            VStack(alignment: .trailing, spacing: 4) {
                                 Text(action.date)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
+                                    .lineLimit(1)
                                 if action.isUndone {
                                     Text("Undone")
                                         .font(.caption.weight(.semibold))
                                         .foregroundStyle(.secondary)
+                                        .lineLimit(1)
                                 } else {
                                     Button("Undo") { actionToUndo = action }
                                         .buttonStyle(.bordered)
+                                        .fixedSize()
                                 }
                             }
                         }
-                        .padding(16)
+                        .padding(14)
                         .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 12))
                     }
                     if store.actions.isEmpty {
                         Text("No applied actions in the local action log.")
                             .font(.callout)
                             .foregroundStyle(.secondary)
-                            .frame(maxWidth: .infinity, minHeight: 100)
+                            .frame(maxWidth: .infinity, minHeight: 80)
                     }
                 }
             }
         }
-        .padding(30)
+        .padding(18)
         .confirmationDialog(
             "Undo this move?",
             isPresented: Binding(
@@ -347,16 +466,19 @@ private struct PageHeader: View {
     let subtitle: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
+        VStack(alignment: .leading, spacing: 4) {
             Text(eyebrow)
                 .font(.caption.weight(.bold))
                 .foregroundStyle(.tint)
                 .tracking(1.2)
             Text(title)
-                .font(.system(size: 30, weight: .bold, design: .rounded))
+                .font(.system(size: 24, weight: .bold, design: .rounded))
+                .lineLimit(1)
+                .minimumScaleFactor(0.9)
             Text(subtitle)
                 .font(.callout)
                 .foregroundStyle(.secondary)
+                .lineLimit(2)
         }
     }
 }
@@ -369,9 +491,10 @@ private struct FilterPill: View {
         Text(title)
             .font(.caption.weight(.medium))
             .foregroundStyle(active ? .white : .primary)
-            .padding(.horizontal, 11)
-            .padding(.vertical, 7)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
             .background(active ? Color.accentColor : Color.secondary.opacity(0.12), in: Capsule())
+            .fixedSize()
     }
 }
 
@@ -388,7 +511,7 @@ private struct FileRow: View {
                     .foregroundStyle(selected ? Color.accentColor : Color.secondary)
                     .frame(width: 30, height: 30)
                     .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 3) {
                     Text(file.name)
                         .font(.body.weight(.semibold))
                         .lineLimit(1)
@@ -397,12 +520,13 @@ private struct FileRow: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
-                Spacer()
+                Spacer(minLength: 8)
                 Text(file.size)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
-            .padding(12)
+            .padding(10)
             .contentShape(RoundedRectangle(cornerRadius: 10))
             .background(selected ? Color.accentColor.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 10))
         }
@@ -414,30 +538,34 @@ private struct FileInspector: View {
     let file: DemoFile
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Image(systemName: file.icon)
-                .font(.system(size: 34))
-                .foregroundStyle(.tint)
-            Text(file.name)
-                .font(.title3.weight(.bold))
-                .fixedSize(horizontal: false, vertical: true)
-            InspectorRow(label: "Type", value: file.kind)
-            InspectorRow(label: "Size", value: file.size)
-            InspectorRow(label: "Modified", value: file.modified)
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Location")
-                    .font(.caption.weight(.semibold))
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 12) {
+                Image(systemName: file.icon)
+                    .font(.system(size: 32))
+                    .foregroundStyle(.tint)
+                Text(file.name)
+                    .font(.title3.weight(.bold))
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                InspectorRow(label: "Type", value: file.kind)
+                InspectorRow(label: "Size", value: file.size)
+                InspectorRow(label: "Modified", value: file.modified)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Location")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    Text(file.path)
+                        .font(.caption)
+                        .lineLimit(4)
+                        .textSelection(.enabled)
+                }
+                Divider()
+                Text(file.snippet)
+                    .font(.callout)
                     .foregroundStyle(.secondary)
-                Text(file.path)
-                    .font(.caption)
-                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            Divider()
-            Text(file.snippet)
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer()
+            .padding(.trailing, 4)
         }
         .frame(maxHeight: .infinity, alignment: .topLeading)
     }
@@ -452,27 +580,33 @@ private struct InspectorRow: View {
             Text(label)
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .lineLimit(1)
             Spacer()
             Text(value)
                 .font(.caption.weight(.medium))
+                .lineLimit(1)
         }
     }
 }
 
 private struct EmptyInspector: View {
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 10) {
             Image(systemName: "cursorarrow.rays")
-                .font(.system(size: 30))
+                .font(.system(size: 28))
                 .foregroundStyle(.secondary)
             Text("Select a file")
                 .font(.headline)
+                .lineLimit(1)
             Text("Inspect metadata and a content snippet here.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
+                .lineLimit(2)
         }
-        .frame(maxHeight: .infinity)
+        .padding(12)
+        .frame(height: 110, alignment: .center)
+        .frame(maxWidth: .infinity)
     }
 }
 
@@ -480,22 +614,25 @@ private struct EmptyWorkspaceCard: View {
     let action: () -> Void
 
     var body: some View {
-        HStack(spacing: 14) {
+        VStack(alignment: .leading, spacing: 8) {
             Image(systemName: "folder.badge.plus")
                 .font(.title2)
                 .foregroundStyle(.tint)
-            VStack(alignment: .leading, spacing: 5) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text("Connect a local folder")
                     .font(.headline)
-                Text("MacPilot will index it locally and keep search and previews read-only.")
+                    .lineLimit(1)
+                Text("MacPilot will index it locally. Search and previews stay read-only until you confirm a move.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.9)
             }
-            Spacer()
             Button("Choose folder…", action: action)
                 .buttonStyle(.borderedProminent)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(16)
+        .padding(12)
         .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 12))
     }
 }
@@ -506,41 +643,48 @@ private struct SuggestionCard: View {
     let apply: () -> Void
 
     var body: some View {
-        HStack(alignment: .top, spacing: 16) {
+        HStack(alignment: .top, spacing: 14) {
             Image(systemName: suggestion.isPreviewed ? "checkmark.seal.fill" : "sparkles")
                 .font(.title2)
                 .foregroundStyle(suggestion.isPreviewed ? Color.green : Color.accentColor)
-                .frame(width: 38, height: 38)
+                .frame(width: 36, height: 36)
                 .background(.quaternary, in: RoundedRectangle(cornerRadius: 10))
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 6) {
                 Text(suggestion.title)
                     .font(.headline)
+                    .lineLimit(1)
                 Text(suggestion.reason)
                     .font(.callout)
                     .foregroundStyle(.secondary)
+                    .lineLimit(2)
                 Label(suggestion.files.joined(separator: " · "), systemImage: "doc.on.doc")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .lineLimit(2)
                 Label(suggestion.destination, systemImage: "folder")
                     .font(.caption.weight(.medium))
                     .foregroundStyle(.tint)
+                    .lineLimit(1)
             }
-            Spacer()
+            Spacer(minLength: 8)
             if suggestion.isPreviewed {
-                HStack(spacing: 8) {
+                HStack(spacing: 6) {
                     Text("Previewed")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.green)
+                        .lineLimit(1)
                     Button("Apply") { apply() }
                         .buttonStyle(.borderedProminent)
                         .tint(.orange)
+                        .fixedSize()
                 }
             } else {
                 Button("Preview") { preview() }
                     .buttonStyle(.borderedProminent)
+                    .fixedSize()
             }
         }
-        .padding(18)
-        .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 14))
+        .padding(14)
+        .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 12))
     }
 }

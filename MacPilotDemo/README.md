@@ -1,6 +1,8 @@
 # MacPilotDemo
 
-Native SwiftUI read-only client for the MacPilot Python core.
+Native SwiftUI client for the MacPilot Python core: local search, safe
+organization suggestions, preview-first confirmed applies, and undoable
+actions.
 
 ## Run in Xcode
 
@@ -19,6 +21,9 @@ The client connects to the local Python core and demonstrates:
 - Apply moves after an explicit confirmation dialog; every applied move is
   recorded in the local action log.
 - Undo a recorded move from Activity with confirmation, restoring the file.
+- Responsive layout: the window opens at a compact 960x640, centers itself,
+  clamps to the visible screen on resize, and every pane adapts from the
+  minimum size up to fullscreen without clipping.
 - Local-only privacy messaging.
 
 The bridge discovers the core from an installed `macpilot` executable, the
