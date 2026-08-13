@@ -259,8 +259,14 @@ private struct SearchView: View {
             .layoutPriority(1)
 
             if store.workspacePath == nil {
-                EmptyWorkspaceCard { store.chooseWorkspace() }
-                    .layoutPriority(1)
+                EmptyWorkspaceCard(
+                    action: { store.chooseWorkspace() },
+                    recentWorkspaces: store.recentWorkspaces,
+                    onSelectRecent: { path in
+                        store.indexWorkspace(URL(fileURLWithPath: path))
+                    }
+                )
+                .layoutPriority(1)
             }
 
             HStack(alignment: .top, spacing: 8) {
@@ -612,6 +618,8 @@ private struct EmptyInspector: View {
 
 private struct EmptyWorkspaceCard: View {
     let action: () -> Void
+    var recentWorkspaces: [String] = []
+    var onSelectRecent: (String) -> Void = { _ in }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -631,6 +639,32 @@ private struct EmptyWorkspaceCard: View {
             Button("Choose folder…", action: action)
                 .buttonStyle(.borderedProminent)
                 .frame(maxWidth: .infinity, alignment: .leading)
+
+            if !recentWorkspaces.isEmpty {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Recent folders")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                    ForEach(recentWorkspaces, id: \.self) { path in
+                        Button {
+                            onSelectRecent(path)
+                        } label: {
+                            Label(
+                                URL(fileURLWithPath: path).lastPathComponent,
+                                systemImage: "clock"
+                            )
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.top, 2)
+            }
         }
         .padding(12)
         .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 12))

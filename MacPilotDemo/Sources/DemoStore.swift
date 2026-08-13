@@ -20,12 +20,17 @@ final class DemoStore: ObservableObject {
     @Published private(set) var coreStatus: CoreStatus?
     @Published private(set) var isBusy = false
     @Published private(set) var statusMessage: String
+    @Published private(set) var recentWorkspaces: [String]
 
     private(set) var coreDescription: String
     private let client: MacPilotClient?
     private var searchResults: [DemoFile] = []
     private var operationTask: Task<Void, Never>?
     private var securityScopedWorkspaceURL: URL?
+    private var lastIndexURL: URL?
+
+    private static let recentWorkspacesKey = "macpilot.recentWorkspaces"
+    private static let recentWorkspacesLimit = 8
 
     init(client: MacPilotClient? = MacPilotClient.discover()) {
         self.client = client
@@ -33,6 +38,8 @@ final class DemoStore: ObservableObject {
         self.statusMessage = client == nil
             ? "Local core not found · set MACPILOT_PROJECT_ROOT or install macpilot"
             : "Choose a folder to index · no files will be changed"
+        self.recentWorkspaces = (UserDefaults.standard
+            .stringArray(forKey: Self.recentWorkspacesKey)) ?? []
     }
 
     deinit {
@@ -96,6 +103,7 @@ final class DemoStore: ObservableObject {
 
         prepareWorkspaceAccess(for: workspaceURL)
         workspacePath = workspaceURL.path
+        lastIndexURL = workspaceURL
         files = []
         suggestions = []
         actions = []
@@ -119,6 +127,7 @@ final class DemoStore: ObservableObject {
                 self?.suggestions = coreSuggestions.map(Self.makeSuggestion)
                 self?.actions = coreActions.map(Self.makeActivity)
                 self?.coreStatus = coreStatus
+                self?.rememberWorkspace(workspaceURL.path)
                 self?.isBusy = false
                 self?.statusMessage = Self.indexStatus(
                     summary: summary,
@@ -131,6 +140,25 @@ final class DemoStore: ObservableObject {
                 self?.statusMessage = Self.errorMessage(error)
             }
         }
+    }
+
+    /// Re-index the most recently chosen folder (used by the retry affordance).
+    func retryLastIndex() {
+        guard let lastIndexURL else {
+            statusMessage = "Nothing to retry · choose a folder first"
+            return
+        }
+        indexWorkspace(lastIndexURL)
+    }
+
+    private func rememberWorkspace(_ path: String) {
+        var workspaces = recentWorkspaces.filter { $0 != path }
+        workspaces.insert(path, at: 0)
+        if workspaces.count > Self.recentWorkspacesLimit {
+            workspaces = Array(workspaces.prefix(Self.recentWorkspacesLimit))
+        }
+        recentWorkspaces = workspaces
+        UserDefaults.standard.set(workspaces, forKey: Self.recentWorkspacesKey)
     }
 
     func preview(_ suggestion: DemoSuggestion) {
@@ -415,6 +443,19 @@ final class DemoStore: ObservableObject {
     }
 
     private static func errorMessage(_ error: Error) -> String {
+        if let coreError = error as? MacPilotClientError {
+            switch coreError {
+            case .timedOut(let command, let timeout):
+                return "\(command) timed out after \(Int(timeout))s · try a smaller folder, then retry"
+            case .executableNotFound:
+                return "Local core not found · set MACPILOT_PROJECT_ROOT or install macpilot"
+            case .commandFailed(let command, let message, let status):
+                let detail = message.isEmpty ? "exit status \(status)" : message
+                return "\(command) failed (\(detail)) · local only, nothing was changed"
+            case .invalidOutput(let command, _):
+                return "\(command) returned unexpected output · the local core may need an update"
+            }
+        }
         if let localized = error as? LocalizedError,
            let description = localized.errorDescription {
             return description

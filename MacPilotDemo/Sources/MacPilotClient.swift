@@ -102,6 +102,9 @@ struct CoreMoveOutcome: Decodable {
 struct MacPilotClient {
     private static let defaultTimeout: TimeInterval = 30
     private static let maximumTimeout: TimeInterval = 300
+    /// Indexing a large folder can legitimately exceed the default command
+    /// timeout, so indexing gets its own generous ceiling.
+    private static let indexTimeout: TimeInterval = 300
 
     let configuration: MacPilotCommandConfiguration
     let databaseURL: URL
@@ -201,7 +204,8 @@ struct MacPilotClient {
         try await runAndDecode(
             CoreIndexSummary.self,
             command: ["index", root.path],
-            label: "index"
+            label: "index",
+            timeout: Self.indexTimeout
         )
     }
 
@@ -272,9 +276,10 @@ struct MacPilotClient {
     private func runAndDecode<T: Decodable>(
         _ type: T.Type,
         command: [String],
-        label: String
+        label: String,
+        timeout: TimeInterval? = nil
     ) async throws -> T {
-        let data = try await run(command: command, label: label)
+        let data = try await run(command: command, label: label, timeout: timeout)
         do {
             let decoder = JSONDecoder()
             decoder.keyDecodingStrategy = .convertFromSnakeCase
@@ -287,7 +292,12 @@ struct MacPilotClient {
         }
     }
 
-    private func run(command: [String], label: String) async throws -> Data {
+    private func run(
+        command: [String],
+        label: String,
+        timeout: TimeInterval? = nil
+    ) async throws -> Data {
+        let effectiveTimeout = min(timeout ?? self.timeout, Self.maximumTimeout)
         let configuration = configuration
         let databasePath = databaseURL.path
         let arguments = configuration.leadingArguments + ["--db", databasePath] + command
@@ -297,7 +307,7 @@ struct MacPilotClient {
                 configuration: configuration,
                 arguments: arguments,
                 label: label,
-                timeout: timeout,
+                timeout: effectiveTimeout,
                 runner: runner
             )
         }
@@ -311,13 +321,13 @@ struct MacPilotClient {
                         }
                         group.addTask {
                             try await Task.sleep(
-                                nanoseconds: Self.timeoutNanoseconds(timeout)
+                                nanoseconds: Self.timeoutNanoseconds(effectiveTimeout)
                             )
                             runner.stop(reason: .timedOut)
                             processTask.cancel()
                             throw MacPilotClientError.timedOut(
                                 command: label,
-                                timeout: timeout
+                                timeout: effectiveTimeout
                             )
                         }
                         defer { group.cancelAll() }
