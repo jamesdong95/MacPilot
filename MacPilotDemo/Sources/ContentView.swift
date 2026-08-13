@@ -316,7 +316,11 @@ private struct SearchView: View {
                     ScrollView {
                         LazyVStack(spacing: 6) {
                             ForEach(store.filteredFiles) { file in
-                                FileRow(file: file, selected: store.selectedFile?.id == file.id) {
+                                FileRow(
+                                    file: file,
+                                    selected: store.selectedFile?.id == file.id,
+                                    highlight: store.query
+                                ) {
                                     store.selectedFile = file
                                 }
                                 .contextMenu {
@@ -566,6 +570,7 @@ private struct FilterPill: View {
 private struct FileRow: View {
     let file: DemoFile
     let selected: Bool
+    var highlight: String = ""
     let action: () -> Void
 
     var body: some View {
@@ -580,7 +585,7 @@ private struct FileRow: View {
                     Text(file.name)
                         .font(.body.weight(.semibold))
                         .lineLimit(1)
-                    Text(file.snippet)
+                    Text(highlightedSnippet)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -596,6 +601,26 @@ private struct FileRow: View {
             .background(selected ? Color.accentColor.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 10))
         }
         .buttonStyle(.plain)
+    }
+
+    private var highlightedSnippet: AttributedString {
+        var attributed = AttributedString(file.snippet)
+        let terms = highlight
+            .split(separator: " ")
+            .map(String.init)
+            .filter { !$0.isEmpty }
+        for term in terms {
+            var searchStart = attributed.startIndex
+            while let range = attributed[searchStart...].range(
+                of: term,
+                options: .caseInsensitive
+            ) {
+                attributed[range].font = .caption.bold()
+                attributed[range].foregroundColor = .accentColor
+                searchStart = range.upperBound
+            }
+        }
+        return attributed
     }
 }
 

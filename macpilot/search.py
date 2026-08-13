@@ -14,8 +14,10 @@ def _match_query(query: str) -> str:
     tokens = _TOKEN_RE.findall(query)
     if not tokens:
         raise ValueError("Search query must contain at least one searchable term")
+    # Prefix match each term so partial words still hit ("inv" → invoice).
+    # FTS5 also expands the last term as a prefix token for typo/prefix tolerance.
     return " AND ".join(
-        f'"{token.replace(chr(34), chr(34) * 2)}"' for token in tokens
+        f'"{token.replace(chr(34), chr(34) * 2)}"*' for token in tokens
     )
 
 
