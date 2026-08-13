@@ -49,6 +49,17 @@ enum FileFilter: String, CaseIterable, Identifiable {
     }
 }
 
+struct OrgRule: Identifiable, Hashable {
+    let id: Int
+    let pattern: String
+    let destination: String
+}
+
+struct FileSummary: Hashable {
+    let fileID: String
+    let text: String
+}
+
 struct DemoFile: Identifiable, Hashable {
     let id: String
     let name: String

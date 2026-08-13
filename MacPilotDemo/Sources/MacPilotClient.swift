@@ -97,6 +97,50 @@ struct CoreSummarize: Decodable {
 }
 
 
+struct CoreRenameItem: Decodable {
+    let source: String?
+    let destination: String?
+    let actionId: Int?
+}
+
+
+struct CoreRename: Decodable {
+    let count: Int
+    let renames: [CoreRenameItem]
+    let mode: String
+}
+
+
+struct CoreRule: Decodable {
+    let id: Int
+    let pattern: String
+    let destination: String
+    let createdAt: String?
+}
+
+
+struct CoreRuleMutation: Decodable {
+    let id: Int
+    let pattern: String?
+    let destination: String?
+    let removed: Bool?
+}
+
+
+struct CoreUndoAllAction: Decodable {
+    let actionId: Int?
+    let sourcePath: String?
+    let destinationPath: String?
+}
+
+
+struct CoreUndoAll: Decodable {
+    let count: Int
+    let actions: [CoreUndoAllAction]
+    let mode: String
+}
+
+
 struct CoreMovePreview: Decodable {
     let actionId: Int
     let source: String
@@ -317,6 +361,46 @@ struct MacPilotClient {
             CoreSummarize.self,
             command: ["summarize", path, "--model", model],
             label: "summarize"
+        )
+    }
+
+    func rename(root: String, find: String, replace: String, apply: Bool) async throws -> CoreRename {
+        var command = ["rename", root, find, replace]
+        if apply { command.append("--apply") }
+        return try await runAndDecode(
+            CoreRename.self,
+            command: command,
+            label: apply ? "rename apply" : "rename preview"
+        )
+    }
+
+    func rules() async throws -> [CoreRule] {
+        try await runAndDecode([CoreRule].self, command: ["rules", "list"], label: "rules list")
+    }
+
+    func addRule(pattern: String, destination: String) async throws -> CoreRuleMutation {
+        try await runAndDecode(
+            CoreRuleMutation.self,
+            command: ["rules", "add", pattern, destination],
+            label: "rules add"
+        )
+    }
+
+    func removeRule(id: Int) async throws -> CoreRuleMutation {
+        try await runAndDecode(
+            CoreRuleMutation.self,
+            command: ["rules", "remove", String(id)],
+            label: "rules remove"
+        )
+    }
+
+    func undoAll(apply: Bool) async throws -> CoreUndoAll {
+        var command = ["undo-all"]
+        if apply { command.append("--apply") }
+        return try await runAndDecode(
+            CoreUndoAll.self,
+            command: command,
+            label: apply ? "undo-all apply" : "undo-all preview"
         )
     }
 

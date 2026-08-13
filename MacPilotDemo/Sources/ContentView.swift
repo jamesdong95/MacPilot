@@ -392,14 +392,26 @@ private struct SearchView: View {
 private struct SuggestionsView: View {
     @EnvironmentObject private var store: DemoStore
     @State private var suggestionToApply: DemoSuggestion?
+    @State private var showRename = false
+    @State private var renameFind = ""
+    @State private var renameReplace = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            PageHeader(
-                eyebrow: "SAFE ORGANIZATION",
-                title: "Suggestions, not surprises.",
-                subtitle: "Review every proposed action before anything changes on disk."
-            )
+            HStack(alignment: .top, spacing: 8) {
+                PageHeader(
+                    eyebrow: "SAFE ORGANIZATION",
+                    title: "Suggestions, not surprises.",
+                    subtitle: "Review every proposed action before anything changes on disk."
+                )
+                Spacer(minLength: 8)
+                Button("Batch rename…") {
+                    showRename = true
+                }
+                .buttonStyle(.bordered)
+                .fixedSize()
+                .disabled(store.workspacePath == nil || store.isBusy)
+            }
 
             ScrollView {
                 LazyVStack(spacing: 12) {
@@ -440,20 +452,84 @@ private struct SuggestionsView: View {
         } message: {
             Text("Files move into a new folder on your disk. Each move is recorded and can be undone from Activity.")
         }
+        .sheet(isPresented: $showRename) {
+            RenameSheet(
+                find: $renameFind,
+                replace: $renameReplace,
+                onApply: {
+                    store.renameApply(find: renameFind, replace: renameReplace)
+                    showRename = false
+                }
+            )
+        }
+    }
+}
+
+private struct RenameSheet: View {
+    @EnvironmentObject private var store: DemoStore
+    @Environment(\.dismiss) private var dismiss
+    @Binding var find: String
+    @Binding var replace: String
+    let onApply: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Batch rename")
+                .font(.title2.bold())
+                .lineLimit(1)
+            Text("Replaces text in filenames across the indexed folder. Every rename is recorded and undoable from Activity.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            LabeledContent("Find") {
+                TextField("e.g. Untitled", text: $find)
+                    .textFieldStyle(.roundedBorder)
+            }
+            LabeledContent("Replace with") {
+                TextField("e.g. Photo", text: $replace)
+                    .textFieldStyle(.roundedBorder)
+            }
+
+            Spacer(minLength: 0)
+
+            HStack {
+                Button("Rename") {
+                    onApply()
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(find.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                Spacer()
+                Button("Cancel") { dismiss() }
+            }
+        }
+        .padding(20)
+        .frame(width: 420, height: 260)
     }
 }
 
 private struct ActivityView: View {
     @EnvironmentObject private var store: DemoStore
     @State private var actionToUndo: ActivityEntry?
+    @State private var undoAllConfirm = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            PageHeader(
-                eyebrow: "AUDIT TRAIL",
-                title: "Local activity, clearly recorded.",
-                subtitle: "Every applied move is recorded. Undo restores the file to its original location."
-            )
+            HStack(alignment: .top, spacing: 8) {
+                PageHeader(
+                    eyebrow: "AUDIT TRAIL",
+                    title: "Local activity, clearly recorded.",
+                    subtitle: "Every applied move is recorded. Undo restores the file to its original location."
+                )
+                Spacer(minLength: 8)
+                if store.actions.contains(where: { !$0.isUndone }) {
+                    Button("Undo all", role: .destructive) {
+                        undoAllConfirm = true
+                    }
+                    .buttonStyle(.bordered)
+                    .fixedSize()
+                }
+            }
 
             ScrollView {
                 LazyVStack(spacing: 10) {
@@ -521,6 +597,18 @@ private struct ActivityView: View {
             }
         } message: {
             Text("The file will be moved back to its original location. The action is recorded as undone.")
+        }
+        .confirmationDialog(
+            "Undo all actions?",
+            isPresented: $undoAllConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Undo All", role: .destructive) {
+                store.undoAllActions()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Every applied move will be reverted, newest first. Each revert stays individually undoable.")
         }
     }
 }
@@ -625,6 +713,7 @@ private struct FileRow: View {
 }
 
 private struct FileInspector: View {
+    @EnvironmentObject private var store: DemoStore
     let file: DemoFile
 
     var body: some View {
@@ -654,6 +743,35 @@ private struct FileInspector: View {
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+
+                if file.isText {
+                    Divider()
+                    if store.summarizingFile {
+                        HStack(spacing: 6) {
+                            ProgressView()
+                                .controlSize(.small)
+                            Text("Summarizing…")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    } else if let summary = store.fileSummary, summary.fileID == file.id {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Label("Summary", systemImage: "sparkles")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                            Text(summary.text)
+                                .font(.callout)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    Button {
+                        store.summarize(file)
+                    } label: {
+                        Label("Summarize locally", systemImage: "sparkles")
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(store.summarizingFile)
+                }
             }
             .padding(.trailing, 4)
         }
@@ -684,6 +802,8 @@ private struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var cliPathText = ""
     @State private var dbPathText = ""
+    @State private var newRulePattern = ""
+    @State private var newRuleDestination = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -715,6 +835,59 @@ private struct SettingsView: View {
                 Text(store.workspacePath ?? "None")
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
+            }
+
+            Divider()
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Organization rules")
+                    .font(.headline)
+                    .lineLimit(1)
+                if store.rules.isEmpty {
+                    Text("No rules yet. Add a pattern like *.pdf → a folder.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(store.rules) { rule in
+                        HStack(spacing: 6) {
+                            Text(rule.pattern)
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(.primary)
+                                .lineLimit(1)
+                            Text("→")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text(rule.destination)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                            Spacer(minLength: 4)
+                            Button(role: .destructive) {
+                                store.removeRule(id: rule.id)
+                            } label: {
+                                Image(systemName: "trash")
+                            }
+                            .buttonStyle(.borderless)
+                            .help("Remove rule")
+                        }
+                    }
+                }
+                HStack(spacing: 6) {
+                    TextField("*.pdf", text: $newRulePattern)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(maxWidth: 130)
+                    TextField("Destination folder", text: $newRuleDestination)
+                        .textFieldStyle(.roundedBorder)
+                    Button("Add") {
+                        store.addRule(pattern: newRulePattern, destination: newRuleDestination)
+                        newRulePattern = ""
+                        newRuleDestination = ""
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(newRulePattern.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                              || newRuleDestination.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
             }
 
             if !store.recentWorkspaces.isEmpty {
@@ -750,10 +923,11 @@ private struct SettingsView: View {
             }
         }
         .padding(20)
-        .frame(width: 500, height: 460)
+        .frame(width: 500, height: 640)
         .onAppear {
             cliPathText = store.configuredCliPath ?? ""
             dbPathText = store.configuredDatabasePath ?? store.databasePath ?? ""
+            store.loadRules()
         }
     }
 }

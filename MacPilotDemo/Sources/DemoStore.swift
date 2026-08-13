@@ -14,6 +14,9 @@ final class DemoStore: ObservableObject {
     @Published var selectedSection: AppSection? = .search
     @Published var selectedFile: DemoFile?
     @Published var activeFilter: FileFilter = .all
+    @Published private(set) var rules: [OrgRule] = []
+    @Published private(set) var fileSummary: FileSummary?
+    @Published private(set) var summarizingFile = false
     @Published private(set) var files: [DemoFile] = []
     @Published private(set) var suggestions: [DemoSuggestion] = []
     @Published private(set) var actions: [ActivityEntry] = []
@@ -406,6 +409,155 @@ final class DemoStore: ObservableObject {
                 self?.isBusy = false
                 self?.statusMessage =
                     "\(file.name) moved to Trash · undo is available in Activity · local only"
+            } catch {
+                guard !Task.isCancelled else { return }
+                self?.isBusy = false
+                self?.statusMessage = Self.errorMessage(error)
+            }
+        }
+    }
+
+    func summarize(_ file: DemoFile) {
+        guard let client else {
+            statusMessage = "Local core unavailable · summarize could not run"
+            return
+        }
+        summarizingFile = true
+        fileSummary = nil
+        statusMessage = "Summarizing \(file.name) locally…"
+        operationTask?.cancel()
+
+        operationTask = Task { [weak self] in
+            do {
+                let result = try await client.summarize(path: file.path)
+                guard !Task.isCancelled else { return }
+                self?.fileSummary = FileSummary(fileID: file.id, text: result.summary)
+                self?.summarizingFile = false
+                self?.statusMessage = "Summary ready · local only"
+            } catch {
+                guard !Task.isCancelled else { return }
+                self?.summarizingFile = false
+                self?.statusMessage = Self.errorMessage(error)
+            }
+        }
+    }
+
+    func undoAllActions() {
+        guard let client else {
+            statusMessage = "Local core unavailable · undo-all could not run"
+            return
+        }
+        guard !isBusy else { return }
+        operationTask?.cancel()
+        isBusy = true
+        statusMessage = "Undoing all actions…"
+
+        operationTask = Task { [weak self] in
+            do {
+                let result = try await client.undoAll(apply: true)
+                guard !Task.isCancelled else { return }
+                try await self?.refreshAfterMutation()
+                guard !Task.isCancelled else { return }
+                self?.isBusy = false
+                self?.statusMessage = "Reverted \(result.count) action(s) · local only"
+            } catch {
+                guard !Task.isCancelled else { return }
+                self?.isBusy = false
+                self?.statusMessage = Self.errorMessage(error)
+            }
+        }
+    }
+
+    func loadRules() {
+        guard let client else { return }
+        operationTask?.cancel()
+        operationTask = Task { [weak self] in
+            do {
+                let fetched = try await client.rules()
+                guard !Task.isCancelled else { return }
+                self?.rules = fetched.map {
+                    OrgRule(id: $0.id, pattern: $0.pattern, destination: $0.destination)
+                }
+            } catch {
+                // Rules are optional; a failed load leaves the list empty.
+            }
+        }
+    }
+
+    func addRule(pattern: String, destination: String) {
+        guard let client else {
+            statusMessage = "Local core unavailable · rule could not be added"
+            return
+        }
+        let cleanPattern = pattern.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanDestination = destination.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanPattern.isEmpty, !cleanDestination.isEmpty else {
+            statusMessage = "Rule needs a pattern and a destination"
+            return
+        }
+        operationTask?.cancel()
+        operationTask = Task { [weak self] in
+            do {
+                _ = try await client.addRule(pattern: cleanPattern, destination: cleanDestination)
+                guard !Task.isCancelled else { return }
+                self?.statusMessage = "Rule added · preview-first"
+                self?.loadRules()
+            } catch {
+                guard !Task.isCancelled else { return }
+                self?.statusMessage = Self.errorMessage(error)
+            }
+        }
+    }
+
+    func removeRule(id: Int) {
+        guard let client else { return }
+        operationTask?.cancel()
+        operationTask = Task { [weak self] in
+            do {
+                _ = try await client.removeRule(id: id)
+                guard !Task.isCancelled else { return }
+                self?.statusMessage = "Rule removed"
+                self?.loadRules()
+            } catch {
+                guard !Task.isCancelled else { return }
+                self?.statusMessage = Self.errorMessage(error)
+            }
+        }
+    }
+
+    func renameApply(find: String, replace: String) {
+        guard let client else {
+            statusMessage = "Local core unavailable · rename could not run"
+            return
+        }
+        guard let workspacePath else {
+            statusMessage = "Choose a folder before renaming"
+            return
+        }
+        let cleanFind = find.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanFind.isEmpty else {
+            statusMessage = "Rename needs a non-empty 'find' text"
+            return
+        }
+        guard !isBusy else { return }
+        operationTask?.cancel()
+        isBusy = true
+        statusMessage = "Renaming files…"
+
+        operationTask = Task { [weak self] in
+            do {
+                let result = try await client.rename(
+                    root: workspacePath,
+                    find: cleanFind,
+                    replace: replace,
+                    apply: true
+                )
+                guard !Task.isCancelled else { return }
+                try await self?.refreshAfterMutation()
+                guard !Task.isCancelled else { return }
+                self?.isBusy = false
+                self?.statusMessage =
+                    "Renamed \(result.count) file(s) · undo available in Activity · local only"
             } catch {
                 guard !Task.isCancelled else { return }
                 self?.isBusy = false
