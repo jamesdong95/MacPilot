@@ -19,6 +19,7 @@ from .organizer import (
     undo_all,
 )
 from .search import list_indexed, search
+from .semantic import DEFAULT_MODEL, OllamaUnavailableError, summarize_file
 
 
 def _path(value: str) -> Path:
@@ -128,6 +129,16 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Actually revert the actions; without this flag only a preview is produced",
     )
+
+    summarize_parser = commands.add_parser(
+        "summarize", help="Summarize a text file with a local Ollama model"
+    )
+    summarize_parser.add_argument("path", type=_path)
+    summarize_parser.add_argument(
+        "--model",
+        default=DEFAULT_MODEL,
+        help=f"Ollama model to use (default: {DEFAULT_MODEL})",
+    )
     return parser
 
 
@@ -231,8 +242,17 @@ def main(argv: list[str] | None = None) -> int:
                 payload = {"count": len(results), "actions": results}
                 payload["mode"] = "applied" if args.apply else "preview"
                 _print(payload)
+            elif args.command == "summarize":
+                summary = summarize_file(args.path, model=args.model)
+                _print(
+                    {
+                        "path": str(args.path),
+                        "model": args.model,
+                        "summary": summary,
+                    }
+                )
         return 0
-    except (OSError, ValueError) as exc:
+    except (OSError, ValueError, OllamaUnavailableError) as exc:
         print(f"macpilot: {exc}", file=sys.stderr)
         return 2
 

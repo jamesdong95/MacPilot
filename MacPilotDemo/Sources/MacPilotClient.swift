@@ -90,6 +90,13 @@ struct CoreDuplicateGroup: Decodable {
 }
 
 
+struct CoreSummarize: Decodable {
+    let path: String
+    let model: String
+    let summary: String
+}
+
+
 struct CoreMovePreview: Decodable {
     let actionId: Int
     let source: String
@@ -302,6 +309,14 @@ struct MacPilotClient {
             [CoreDuplicateGroup].self,
             command: ["duplicates"],
             label: "duplicates"
+        )
+    }
+
+    func summarize(path: String, model: String = "qwen2.5:7b") async throws -> CoreSummarize {
+        try await runAndDecode(
+            CoreSummarize.self,
+            command: ["summarize", path, "--model", model],
+            label: "summarize"
         )
     }
 
