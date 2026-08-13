@@ -9,7 +9,15 @@ from pathlib import Path
 from . import __version__
 from .database import Database
 from .indexer import Indexer
-from .organizer import apply_move, preview_move, rename_batch, suggest, trash, undo_action
+from .organizer import (
+    apply_move,
+    preview_move,
+    rename_batch,
+    suggest,
+    trash,
+    undo_action,
+    undo_all,
+)
 from .search import list_indexed, search
 
 
@@ -113,6 +121,13 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Actually rename the files; without this flag only a preview is produced",
     )
+
+    undo_all_parser = commands.add_parser("undo-all", help="Undo every active action")
+    undo_all_parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="Actually revert the actions; without this flag only a preview is produced",
+    )
     return parser
 
 
@@ -209,6 +224,11 @@ def main(argv: list[str] | None = None) -> int:
                     database, args.root, args.find, args.replace, apply=args.apply
                 )
                 payload = {"count": len(results), "renames": results}
+                payload["mode"] = "applied" if args.apply else "preview"
+                _print(payload)
+            elif args.command == "undo-all":
+                results = undo_all(database, apply=args.apply)
+                payload = {"count": len(results), "actions": results}
                 payload["mode"] = "applied" if args.apply else "preview"
                 _print(payload)
         return 0

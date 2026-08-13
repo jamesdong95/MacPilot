@@ -460,3 +460,35 @@ def rename_batch(
             }
         )
     return applied
+
+
+def undo_all(
+    database: Database, *, apply: bool = False
+) -> list[dict[str, str | int | None]]:
+    """Undo every active (not-yet-undone) action, newest first.
+
+    Preview returns the list of actions that would be reverted; apply reverts
+    each in turn. Each revert is still recorded, so a single action can be
+    undone again in isolation.
+    """
+    actions = list(database.list_actions(active_only=True))
+    if not apply:
+        return [
+            {
+                "action_id": int(row["id"]),
+                "source_path": row["source_path"],
+                "destination_path": row["destination_path"],
+            }
+            for row in actions
+        ]
+    results: list[dict[str, str | int | None]] = []
+    for row in actions:
+        result = undo_action(database, int(row["id"]), apply=True)
+        results.append(
+            {
+                "action_id": result.action_id,
+                "source_path": str(result.source_path),
+                "destination_path": str(result.destination_path),
+            }
+        )
+    return results

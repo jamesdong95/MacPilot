@@ -272,6 +272,35 @@ class CliTests(unittest.TestCase):
         self.assertTrue(first.exists())
         self.assertFalse((self.workspace / "pic-1.txt").exists())
 
+    def test_undo_all_reverts_every_active_action(self) -> None:
+        first = self.workspace / "a.txt"
+        second = self.workspace / "b.txt"
+        first.write_text("a", encoding="utf-8")
+        second.write_text("b", encoding="utf-8")
+        dest_a = self.workspace / "organized" / "a.txt"
+        dest_b = self.workspace / "organized" / "b.txt"
+
+        exit_code, _, error = self.run_cli("index", str(self.workspace))
+        self.assertEqual(exit_code, 0, error)
+        exit_code, _, error = self.run_cli("move", str(first), str(dest_a), "--apply")
+        self.assertEqual(exit_code, 0, error)
+        exit_code, _, error = self.run_cli("move", str(second), str(dest_b), "--apply")
+        self.assertEqual(exit_code, 0, error)
+
+        exit_code, payload, error = self.run_cli("undo-all")
+        self.assertEqual(exit_code, 0, error)
+        self.assertEqual(payload["mode"], "preview")
+        self.assertEqual(payload["count"], 2)
+
+        exit_code, payload, error = self.run_cli("undo-all", "--apply")
+        self.assertEqual(exit_code, 0, error)
+        self.assertEqual(payload["mode"], "applied")
+        self.assertEqual(payload["count"], 2)
+        self.assertTrue(first.exists())
+        self.assertTrue(second.exists())
+        self.assertFalse(dest_a.exists())
+        self.assertFalse(dest_b.exists())
+
     def test_trash_preview_apply_and_undo(self) -> None:
         import os
 
