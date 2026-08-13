@@ -55,6 +55,11 @@ struct ContentView: View {
                 return
             }
             let visible = screen.visibleFrame
+            // Guard against bogus/zero-height frames (VDI and virtual displays
+            // can report a titlebar-sized visibleFrame): if the visible area is
+            // implausibly small, leave the window at its default size instead
+            // of collapsing it to a sliver.
+            guard visible.width >= 480, visible.height >= 480 else { return }
             let currentContentRect = window.contentRect(forFrameRect: window.frame)
             let frameInsets = CGSize(
                 width: window.frame.width - currentContentRect.width,
@@ -82,6 +87,7 @@ struct ContentView: View {
             return
         }
         let visible = screen.visibleFrame
+        guard visible.width >= 480, visible.height >= 480 else { return }
         var frame = window.frame
         var changed = false
 
