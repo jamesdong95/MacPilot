@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import errno
+import fnmatch
 import os
 import re
 import shutil
@@ -42,22 +43,40 @@ CATEGORY_BY_EXTENSION = {
 
 def suggest(database: Database, root: Path | str) -> list[Suggestion]:
     root_path = Path(root).expanduser().resolve()
-    groups: dict[str, list[Path]] = defaultdict(list)
+    rules = [dict(row) for row in database.list_rules()]
+    groups: dict[tuple[str, str], list[Path]] = defaultdict(list)
+
+    def matching_rule(name: str) -> dict | None:
+        for rule in rules:
+            if fnmatch.fnmatch(name, rule["pattern"]):
+                return rule
+        return None
+
     for row in database.files_under(root_path):
         path = Path(row["path"])
-        category = CATEGORY_BY_EXTENSION.get(row["extension"])
-        if category is None or path.parent == root_path / category:
+        rule = matching_rule(row["name"])
+        if rule is not None:
+            destination = Path(rule["destination"]).expanduser()
+            if not destination.is_absolute():
+                destination = root_path / destination
+            category = f"Rule: {rule['pattern']}"
+        else:
+            category = CATEGORY_BY_EXTENSION.get(row["extension"])
+            if category is None:
+                continue
+            destination = root_path / category
+        if path.parent == destination:
             continue
-        groups[category].append(path)
+        groups[(category, str(destination))].append(path)
 
     return [
         Suggestion(
             category=category,
-            destination=root_path / category,
+            destination=Path(destination),
             files=tuple(sorted(files)),
-            reason=f"{len(files)} files share the {category} category",
+            reason=f"{len(files)} files match {category}",
         )
-        for category, files in sorted(groups.items())
+        for (category, destination), files in sorted(groups.items())
         if len(files) >= 2
     ]
 

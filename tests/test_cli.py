@@ -196,6 +196,47 @@ class CliTests(unittest.TestCase):
             {"copy-a.txt", "copy-b.txt"},
         )
 
+    def test_rules_add_list_remove_and_apply(self) -> None:
+        pdf_one = self.workspace / "one.pdf"
+        pdf_two = self.workspace / "two.pdf"
+        pdf_one.write_bytes(b"pdf-one")
+        pdf_two.write_bytes(b"pdf-two")
+
+        exit_code, _, error = self.run_cli("index", str(self.workspace))
+        self.assertEqual(exit_code, 0, error)
+
+        exit_code, payload, error = self.run_cli("rules", "list")
+        self.assertEqual(exit_code, 0, error)
+        self.assertEqual(payload, [])
+
+        rule_dest = self.workspace / "PDFs"
+        exit_code, payload, error = self.run_cli(
+            "rules", "add", "*.pdf", str(rule_dest)
+        )
+        self.assertEqual(exit_code, 0, error)
+        self.assertEqual(set(payload), {"id", "pattern", "destination"})
+        rule_id = payload["id"]
+
+        exit_code, payload, error = self.run_cli("rules", "list")
+        self.assertEqual(exit_code, 0, error)
+        self.assertEqual(len(payload), 1)
+        self.assertEqual(payload[0]["pattern"], "*.pdf")
+
+        exit_code, suggest_payload, error = self.run_cli("suggest", str(self.workspace))
+        self.assertEqual(exit_code, 0, error)
+        rule_groups = [g for g in suggest_payload if g["category"] == "Rule: *.pdf"]
+        self.assertEqual(len(rule_groups), 1)
+        self.assertEqual(Path(rule_groups[0]["destination"]), rule_dest)
+        self.assertEqual(len(rule_groups[0]["files"]), 2)
+
+        exit_code, payload, error = self.run_cli("rules", "remove", str(rule_id))
+        self.assertEqual(exit_code, 0, error)
+        self.assertIs(payload["removed"], True)
+
+        exit_code, payload, error = self.run_cli("rules", "list")
+        self.assertEqual(exit_code, 0, error)
+        self.assertEqual(payload, [])
+
     def test_trash_preview_apply_and_undo(self) -> None:
         import os
 

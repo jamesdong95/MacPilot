@@ -94,6 +94,15 @@ def build_parser() -> argparse.ArgumentParser:
     commands.add_parser("status", help="Show database and action summary")
 
     commands.add_parser("duplicates", help="Report duplicate files by content hash")
+
+    rules_parser = commands.add_parser("rules", help="Manage organization rules")
+    rules_sub = rules_parser.add_subparsers(dest="rules_action", required=True)
+    rules_sub.add_parser("list", help="List rules")
+    rules_add = rules_sub.add_parser("add", help="Add a rule")
+    rules_add.add_argument("pattern", help="Filename glob pattern, e.g. '*.pdf'")
+    rules_add.add_argument("destination", help="Destination directory (relative to root or absolute)")
+    rules_remove = rules_sub.add_parser("remove", help="Remove a rule")
+    rules_remove.add_argument("rule_id", type=int, help="Rule id from 'rules list'")
     return parser
 
 
@@ -166,6 +175,25 @@ def main(argv: list[str] | None = None) -> int:
                 _print(database.status_counts())
             elif args.command == "duplicates":
                 _print(database.duplicate_groups())
+            elif args.command == "rules":
+                if args.rules_action == "list":
+                    _print([dict(row) for row in database.list_rules()])
+                elif args.rules_action == "add":
+                    rule_id = database.add_rule(args.pattern, args.destination)
+                    _print(
+                        {
+                            "id": rule_id,
+                            "pattern": args.pattern,
+                            "destination": args.destination,
+                        }
+                    )
+                elif args.rules_action == "remove":
+                    _print(
+                        {
+                            "id": args.rule_id,
+                            "removed": database.remove_rule(args.rule_id),
+                        }
+                    )
         return 0
     except (OSError, ValueError) as exc:
         print(f"macpilot: {exc}", file=sys.stderr)

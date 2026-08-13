@@ -77,6 +77,13 @@ class Database:
                 FOREIGN KEY (suggestion_id) REFERENCES suggestions(id)
             );
 
+            CREATE TABLE IF NOT EXISTS rules (
+                id INTEGER PRIMARY KEY,
+                pattern TEXT NOT NULL UNIQUE,
+                destination TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+
             CREATE INDEX IF NOT EXISTS idx_files_root_path ON files(root_path);
             CREATE INDEX IF NOT EXISTS idx_suggestions_status
                 ON suggestions(status);
@@ -158,6 +165,29 @@ class Database:
             }
             for row in rows
         ]
+
+    def add_rule(self, pattern: str, destination: str) -> int:
+        connection = self._ensure_open()
+        cursor = connection.execute(
+            "INSERT INTO rules (pattern, destination) VALUES (?, ?)",
+            (pattern, destination),
+        )
+        connection.commit()
+        if cursor.lastrowid is None:
+            raise RuntimeError("Failed to insert rule")
+        return int(cursor.lastrowid)
+
+    def list_rules(self) -> list[sqlite3.Row]:
+        connection = self._ensure_open()
+        return connection.execute(
+            "SELECT id, pattern, destination, created_at FROM rules ORDER BY id"
+        ).fetchall()
+
+    def remove_rule(self, rule_id: int) -> bool:
+        connection = self._ensure_open()
+        cursor = connection.execute("DELETE FROM rules WHERE id = ?", (rule_id,))
+        connection.commit()
+        return cursor.rowcount > 0
 
     def upsert_file(
         self,
