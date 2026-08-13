@@ -4,6 +4,21 @@ All notable changes to MacPilot are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-08-13
+
+### Added
+
+- Custom organization rules: `rules add "*.pdf" <dir>` / `rules list` /
+  `rules remove <id>`; suggestions apply user rules before extension
+  categories.
+- Batch rename: `rename <root> <find> <replace>` previews then applies a
+  substring rename across a folder, each rename individually undoable.
+- Undo-all: `undo-all` reverts every active action newest-first, with preview.
+- Opt-in local AI summarization: `summarize <path>` calls a running local
+  Ollama server (default model qwen2.5:7b). Dependency-free and graceful —
+  a missing Ollama yields a clear error, never a crash. `MACPILOT_OLLAMA_URL`
+  overrides the server address.
+
 ## [0.5.0] - 2026-08-13
 
 ### Added
