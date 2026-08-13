@@ -26,6 +26,7 @@ class SearchResult:
     modified_at: datetime
     snippet: str
     score: float
+    is_text: bool = False
 
 
 @dataclass(frozen=True)

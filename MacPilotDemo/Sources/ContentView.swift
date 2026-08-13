@@ -272,9 +272,13 @@ private struct SearchView: View {
             HStack(spacing: 8) {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 6) {
-                        FilterPill(title: "All files", active: true)
-                        FilterPill(title: "Content")
-                        FilterPill(title: "Recently changed")
+                        ForEach(FileFilter.allCases) { filter in
+                            FilterPill(
+                                title: filter.title,
+                                active: store.activeFilter == filter,
+                                action: { store.activeFilter = filter }
+                            )
+                        }
                     }
                 }
                 Spacer(minLength: 2)
@@ -520,15 +524,19 @@ private struct PageHeader: View {
 private struct FilterPill: View {
     let title: String
     var active = false
+    let action: () -> Void
 
     var body: some View {
-        Text(title)
-            .font(.caption.weight(.medium))
-            .foregroundStyle(active ? .white : .primary)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(active ? Color.accentColor : Color.secondary.opacity(0.12), in: Capsule())
-            .fixedSize()
+        Button(action: action) {
+            Text(title)
+                .font(.caption.weight(.medium))
+                .foregroundStyle(active ? .white : .primary)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(active ? Color.accentColor : Color.secondary.opacity(0.12), in: Capsule())
+                .fixedSize()
+        }
+        .buttonStyle(.plain)
     }
 }
 

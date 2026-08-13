@@ -26,6 +26,7 @@ def search(database, query: str, limit: int = 20) -> list[SearchResult]:
     rows = database.connection.execute(
         """
         SELECT f.id, f.path, f.name, f.extension, f.size, f.mtime_ns,
+               f.is_text,
                snippet(file_fts, 1, '[', ']', '…', 24) AS snippet,
                bm25(file_fts) AS rank
         FROM file_fts
@@ -46,6 +47,7 @@ def search(database, query: str, limit: int = 20) -> list[SearchResult]:
             modified_at=datetime.fromtimestamp(row["mtime_ns"] / 1_000_000_000),
             snippet=row["snippet"] or row["name"],
             score=float(-row["rank"]),
+            is_text=bool(row["is_text"]),
         )
         for row in rows
     ]
@@ -71,6 +73,7 @@ def list_indexed(
             modified_at=datetime.fromtimestamp(row["mtime_ns"] / 1_000_000_000),
             snippet=row["name"],
             score=0.0,
+            is_text=bool(row["is_text"]),
         )
         for row in rows
     ]

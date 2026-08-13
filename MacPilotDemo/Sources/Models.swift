@@ -33,6 +33,22 @@ enum AppSection: String, CaseIterable, Hashable, Identifiable {
     }
 }
 
+enum FileFilter: String, CaseIterable, Identifiable {
+    case all
+    case content
+    case recent
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .all: return "All files"
+        case .content: return "Content"
+        case .recent: return "Recently changed"
+        }
+    }
+}
+
 struct DemoFile: Identifiable, Hashable {
     let id: String
     let name: String
@@ -41,6 +57,8 @@ struct DemoFile: Identifiable, Hashable {
     let size: String
     let modified: String
     let snippet: String
+    let isText: Bool
+    let modifiedAt: Date?
 
     init(
         id: String? = nil,
@@ -49,7 +67,9 @@ struct DemoFile: Identifiable, Hashable {
         kind: String,
         size: String,
         modified: String,
-        snippet: String
+        snippet: String,
+        isText: Bool = false,
+        modifiedAt: Date? = nil
     ) {
         self.id = id ?? path
         self.name = name
@@ -58,6 +78,8 @@ struct DemoFile: Identifiable, Hashable {
         self.size = size
         self.modified = modified
         self.snippet = snippet
+        self.isText = isText
+        self.modifiedAt = modifiedAt
     }
 
     var icon: String {

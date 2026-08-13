@@ -97,7 +97,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(len(list_payload), 3)
         self.assertEqual(
             set(list_payload[0]),
-            {"file_id", "path", "filename", "extension", "size", "modified_at", "snippet", "score"},
+            {"file_id", "path", "filename", "extension", "size", "modified_at", "snippet", "score", "is_text"},
         )
 
         exit_code, search_payload, error = self.run_cli("search", "invoice")

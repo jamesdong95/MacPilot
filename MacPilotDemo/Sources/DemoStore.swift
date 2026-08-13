@@ -13,6 +13,7 @@ final class DemoStore: ObservableObject {
     }
     @Published var selectedSection: AppSection? = .search
     @Published var selectedFile: DemoFile?
+    @Published var activeFilter: FileFilter = .all
     @Published private(set) var files: [DemoFile] = []
     @Published private(set) var suggestions: [DemoSuggestion] = []
     @Published private(set) var actions: [ActivityEntry] = []
@@ -49,9 +50,21 @@ final class DemoStore: ObservableObject {
     }
 
     var filteredFiles: [DemoFile] {
-        query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let base = query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             ? files
             : searchResults
+        switch activeFilter {
+        case .all:
+            return base
+        case .content:
+            return base.filter { $0.isText }
+        case .recent:
+            let cutoff = Date().addingTimeInterval(-7 * 24 * 3600)
+            return base.filter { file in
+                guard let modifiedAt = file.modifiedAt else { return false }
+                return modifiedAt >= cutoff
+            }
+        }
     }
 
     var hasCore: Bool {
@@ -453,7 +466,9 @@ final class DemoStore: ObservableObject {
                 countStyle: .file
             ),
             modified: displayDate(result.modifiedAt),
-            snippet: result.snippet
+            snippet: result.snippet,
+            isText: result.isText ?? false,
+            modifiedAt: parseDate(result.modifiedAt)
         )
     }
 
@@ -495,6 +510,14 @@ final class DemoStore: ObservableObject {
 
     private static func displayDate(_ value: String) -> String {
         value.replacingOccurrences(of: "T", with: " ")
+    }
+
+    private static func parseDate(_ value: String) -> Date? {
+        let formatter = ISO8601DateFormatter()
+        if let date = formatter.date(from: value) {
+            return date
+        }
+        return formatter.date(from: value.replacingOccurrences(of: " ", with: "T"))
     }
 
     private static func indexStatus(

@@ -52,6 +52,7 @@ struct CoreSearchResult: Decodable {
     let modifiedAt: String
     let snippet: String
     let score: Double
+    let isText: Bool?
 }
 
 
