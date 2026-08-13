@@ -9,7 +9,7 @@ from pathlib import Path
 from . import __version__
 from .database import Database
 from .indexer import Indexer
-from .organizer import apply_move, preview_move, suggest, undo_action
+from .organizer import apply_move, preview_move, suggest, trash, undo_action
 from .search import list_indexed, search
 
 
@@ -76,6 +76,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="Actually undo the move; without this flag only a preview is produced",
     )
 
+    trash_parser = commands.add_parser("trash", help="Move an indexed file to the Trash")
+    trash_parser.add_argument("source", type=_path)
+    trash_parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="Actually move the file to the Trash; without this flag only a preview is produced",
+    )
+
     actions_parser = commands.add_parser("actions", help="List recorded file actions")
     actions_parser.add_argument(
         "--active-only",
@@ -127,6 +135,19 @@ def main(argv: list[str] | None = None) -> int:
                         "action_id": result.action_id,
                         "source_path": str(result.source_path),
                         "destination_path": str(result.destination_path),
+                    }
+                else:
+                    payload = asdict(result)
+                payload["mode"] = "applied" if args.apply else "preview"
+                _print(payload)
+            elif args.command == "trash":
+                result = trash(database, args.source, apply=args.apply)
+                if args.apply:
+                    payload = {
+                        "applied": True,
+                        "action_id": result.action_id,
+                        "source_path": str(result.source),
+                        "destination_path": str(result.destination),
                     }
                 else:
                     payload = asdict(result)

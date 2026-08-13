@@ -224,6 +224,7 @@ private struct SidebarView: View {
 
 private struct SearchView: View {
     @EnvironmentObject private var store: DemoStore
+    @State private var fileToTrash: DemoFile?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -318,6 +319,11 @@ private struct SearchView: View {
                                 FileRow(file: file, selected: store.selectedFile?.id == file.id) {
                                     store.selectedFile = file
                                 }
+                                .contextMenu {
+                                    Button("Move to Trash", role: .destructive) {
+                                        fileToTrash = file
+                                    }
+                                }
                             }
                             if store.filteredFiles.isEmpty, store.workspacePath != nil {
                                 Text(store.query.isEmpty ? "No indexed files yet." : "No matching files.")
@@ -359,6 +365,23 @@ private struct SearchView: View {
         // Leave enough room for the 760pt detail minimum beside the sidebar
         // when the window is at its 960pt minimum.
         .padding(12)
+        .confirmationDialog(
+            "Move \(fileToTrash?.name ?? "this file") to the Trash?",
+            isPresented: Binding(
+                get: { fileToTrash != nil },
+                set: { if !$0 { fileToTrash = nil } }
+            )
+        ) {
+            Button("Move to Trash", role: .destructive) {
+                if let file = fileToTrash {
+                    store.trash(file)
+                }
+                fileToTrash = nil
+            }
+            Button("Cancel", role: .cancel) { fileToTrash = nil }
+        } message: {
+            Text("The file is moved to the macOS Trash and can be undone from Activity.")
+        }
     }
 }
 

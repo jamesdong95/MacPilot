@@ -378,6 +378,42 @@ final class DemoStore: ObservableObject {
         }
     }
 
+    func trash(_ file: DemoFile) {
+        guard let client else {
+            statusMessage = "Local core unavailable · trash could not run"
+            return
+        }
+        guard !isBusy else { return }
+
+        operationTask?.cancel()
+        isBusy = true
+        statusMessage = "Moving \(file.name) to Trash…"
+        let source = file.path
+
+        operationTask = Task { [weak self] in
+            do {
+                let outcome = try await client.trashApply(source: source)
+                guard outcome.applied else {
+                    throw MacPilotClientError.commandFailed(
+                        command: "trash apply",
+                        message: "The core did not confirm the trash",
+                        status: -1
+                    )
+                }
+                guard !Task.isCancelled else { return }
+                try await self?.refreshAfterMutation()
+                guard !Task.isCancelled else { return }
+                self?.isBusy = false
+                self?.statusMessage =
+                    "\(file.name) moved to Trash · undo is available in Activity · local only"
+            } catch {
+                guard !Task.isCancelled else { return }
+                self?.isBusy = false
+                self?.statusMessage = Self.errorMessage(error)
+            }
+        }
+    }
+
     private func scheduleSearch() {
         operationTask?.cancel()
         let term = query.trimmingCharacters(in: .whitespacesAndNewlines)

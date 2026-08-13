@@ -174,6 +174,48 @@ class CliTests(unittest.TestCase):
         self.assertIsNone(payload)
         self.assertIn("limit must be between 1 and 200", error)
 
+    def test_trash_preview_apply_and_undo(self) -> None:
+        import os
+
+        source = self.workspace / "notes.txt"
+        source.write_text("scratch notes", encoding="utf-8")
+        trash_dir = Path(self.temp_dir.name) / "Trash"
+
+        exit_code, _, error = self.run_cli("index", str(self.workspace))
+        self.assertEqual(exit_code, 0, error)
+
+        old_trash = os.environ.get("MACPILOT_TRASH")
+        os.environ["MACPILOT_TRASH"] = str(trash_dir)
+        try:
+            exit_code, preview_payload, error = self.run_cli("trash", str(source))
+            self.assertEqual(exit_code, 0, error)
+            self.assertEqual(preview_payload["mode"], "preview")
+            self.assertTrue(source.exists())
+            self.assertFalse((trash_dir / "notes.txt").exists())
+
+            exit_code, apply_payload, error = self.run_cli("trash", str(source), "--apply")
+            self.assertEqual(exit_code, 0, error)
+            self.assertEqual(
+                set(apply_payload),
+                {"applied", "action_id", "source_path", "destination_path", "mode"},
+            )
+            self.assertIs(apply_payload["applied"], True)
+            self.assertEqual(apply_payload["mode"], "applied")
+            self.assertFalse(source.exists())
+            self.assertTrue((trash_dir / "notes.txt").exists())
+
+            exit_code, undo_payload, error = self.run_cli(
+                "undo", str(apply_payload["action_id"]), "--apply"
+            )
+            self.assertEqual(exit_code, 0, error)
+            self.assertTrue(source.exists())
+            self.assertFalse((trash_dir / "notes.txt").exists())
+        finally:
+            if old_trash is None:
+                os.environ.pop("MACPILOT_TRASH", None)
+            else:
+                os.environ["MACPILOT_TRASH"] = old_trash
+
 
 if __name__ == "__main__":
     unittest.main()

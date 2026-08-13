@@ -362,3 +362,37 @@ def undo_action(
 def undo(database: Database, action_id: int) -> MoveResult:
     result = undo_action(database, action_id, apply=True)
     return MoveResult(action_id, result.source_path, result.destination_path)
+
+
+def _unique_trash_destination(directory: Path, name: str) -> Path:
+    """Return a collision-free path inside `directory` for `name`."""
+    candidate = directory / name
+    if not candidate.exists():
+        return candidate
+    stem = candidate.stem
+    suffix = candidate.suffix
+    index = 2
+    while True:
+        candidate = directory / f"{stem} {index}{suffix}"
+        if not candidate.exists():
+            return candidate
+        index += 1
+
+
+def trash(database: Database, source: Path | str, *, apply: bool = False) -> MoveResult:
+    """Move an indexed file into the macOS Trash (undoable via the action log).
+
+    Preview returns the planned Trash destination without touching anything;
+    apply performs the move, records it, and returns the action id.
+    """
+    source_path = Path(source).expanduser().resolve()
+    if database.file_record(source_path) is None:
+        raise ValueError(f"Source is not indexed: {source_path}")
+    trash_directory = Path(
+        os.environ.get("MACPILOT_TRASH") or (Path.home() / ".Trash")
+    )
+    trash_directory.mkdir(parents=True, exist_ok=True)
+    destination = _unique_trash_destination(trash_directory, source_path.name)
+    if not apply:
+        return preview_move(source_path, destination)
+    return apply_move(database, source_path, destination)

@@ -274,6 +274,22 @@ struct MacPilotClient {
         )
     }
 
+    func trashPreview(source: String) async throws -> CoreMovePreview {
+        try await runAndDecode(
+            CoreMovePreview.self,
+            command: ["trash", source],
+            label: "trash preview"
+        )
+    }
+
+    func trashApply(source: String) async throws -> CoreMoveOutcome {
+        try await runAndDecode(
+            CoreMoveOutcome.self,
+            command: ["trash", source, "--apply"],
+            label: "trash apply"
+        )
+    }
+
     private func runAndDecode<T: Decodable>(
         _ type: T.Type,
         command: [String],
