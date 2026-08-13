@@ -4,6 +4,26 @@ All notable changes to MacPilot are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-08-13
+
+### Added
+
+- Indexing gets its own 300-second timeout so large folders no longer fail
+  mid-index; other core commands keep the 30-second default.
+- Recent-workspaces list (up to 8, persisted) shown on the empty-state card
+  for one-click re-index, plus a Settings sheet (gear in the sidebar) showing
+  the core, database path, indexed folder, and a "clear recent" action.
+- Actionable error messages: timeouts suggest retrying a smaller folder,
+  command failures note nothing was changed, invalid output hints the core
+  may need an update.
+
+### Fixed
+
+- Closed the install-to-run TOCTOU window in the Process bridge so a stop
+  requested between install and run terminates the child instead of leaking it.
+- Replaced an ambiguous "read-only slice" message with accurate
+  "changes require explicit confirmation" wording.
+
 ## [0.3.0] - 2026-08-12
 
 ### Added

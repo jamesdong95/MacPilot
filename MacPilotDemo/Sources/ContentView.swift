@@ -4,10 +4,11 @@ import AppKit
 
 struct ContentView: View {
     @EnvironmentObject private var store: DemoStore
+    @State private var showSettings = false
 
     var body: some View {
         NavigationSplitView {
-            SidebarView()
+            SidebarView(onSettings: { showSettings = true })
         } detail: {
             Group {
                 switch store.selectedSection ?? .search {
@@ -36,6 +37,9 @@ struct ContentView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResizeNotification)) { _ in
             clampWindowToScreen()
+        }
+        .sheet(isPresented: $showSettings) {
+            SettingsView()
         }
     }
 
@@ -111,18 +115,29 @@ struct ContentView: View {
 
 private struct SidebarView: View {
     @EnvironmentObject private var store: DemoStore
+    var onSettings: () -> Void = {}
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            VStack(alignment: .leading, spacing: 2) {
-                Label("MacPilot", systemImage: "sparkle.magnifyingglass")
-                    .font(.system(size: 20, weight: .bold, design: .rounded))
-                    .lineLimit(1)
-                Text("Local-first file intelligence")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
+            HStack(alignment: .center, spacing: 8) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Label("MacPilot", systemImage: "sparkle.magnifyingglass")
+                        .font(.system(size: 20, weight: .bold, design: .rounded))
+                        .lineLimit(1)
+                    Text("Local-first file intelligence")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
+                }
+                Spacer(minLength: 4)
+                Button(action: onSettings) {
+                    Image(systemName: "gearshape")
+                        .font(.system(size: 13))
+                }
+                .buttonStyle(.borderless)
+                .help("Settings")
+                .accessibilityLabel("Settings")
             }
             .padding(.horizontal, 14)
             .padding(.top, 14)
@@ -592,6 +607,67 @@ private struct InspectorRow: View {
                 .font(.caption.weight(.medium))
                 .lineLimit(1)
         }
+    }
+}
+
+private struct SettingsView: View {
+    @EnvironmentObject private var store: DemoStore
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Settings")
+                .font(.title2.bold())
+                .lineLimit(1)
+
+            Divider()
+
+            LabeledContent("Core") {
+                Text(store.coreDescription)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+            LabeledContent("Database") {
+                Text(store.databasePath ?? "—")
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+            LabeledContent("Indexed folder") {
+                Text(store.workspacePath ?? "None")
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+
+            if !store.recentWorkspaces.isEmpty {
+                Divider()
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Recent folders")
+                        .font(.headline)
+                        .lineLimit(1)
+                    ForEach(store.recentWorkspaces, id: \.self) { path in
+                        Text(path)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                    Button("Clear recent folders") {
+                        store.clearRecentWorkspaces()
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+
+            Spacer(minLength: 0)
+
+            HStack {
+                Spacer()
+                Button("Done") { dismiss() }
+                    .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(20)
+        .frame(width: 480, height: 400)
     }
 }
 

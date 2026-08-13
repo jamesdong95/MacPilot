@@ -57,6 +57,16 @@ final class DemoStore: ObservableObject {
         client != nil
     }
 
+    /// Path of the local SQLite index the core reads and writes.
+    var databasePath: String? {
+        client?.databaseURL.path
+    }
+
+    func clearRecentWorkspaces() {
+        recentWorkspaces = []
+        UserDefaults.standard.removeObject(forKey: Self.recentWorkspacesKey)
+    }
+
     var workspaceName: String {
         guard let workspacePath else { return "No folder selected" }
         return URL(fileURLWithPath: workspacePath).lastPathComponent
@@ -112,7 +122,7 @@ final class DemoStore: ObservableObject {
         searchResults = []
         operationTask?.cancel()
         isBusy = true
-        statusMessage = "Indexing \(workspaceURL.path) locally…"
+        statusMessage = "Indexing \(workspaceURL.path) locally — large folders may take a while…"
 
         operationTask = Task { [weak self] in
             do {

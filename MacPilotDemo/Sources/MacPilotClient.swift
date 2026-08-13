@@ -384,6 +384,13 @@ struct MacPilotClient {
 
                 do {
                     try process.run()
+                    // Close the install→run TOCTOU window: if a stop was
+                    // requested after the guard above but before run(), the
+                    // process would otherwise keep running detached. Terminate
+                    // it now so the stop error surfaces on waitUntilExit.
+                    if runner.shouldStop {
+                        process.terminate()
+                    }
                 } catch {
                     runner.finish()
                     continuation.resume(
