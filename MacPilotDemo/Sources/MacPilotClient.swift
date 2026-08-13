@@ -463,6 +463,10 @@ struct MacPilotClient {
         if let configured = environment["MACPILOT_DB"], !configured.isEmpty {
             return URL(fileURLWithPath: configured).standardizedFileURL
         }
+        if let saved = UserDefaults.standard.string(forKey: "macpilot.dbPath"),
+           !saved.isEmpty {
+            return URL(fileURLWithPath: saved).standardizedFileURL
+        }
         return fileManager.homeDirectoryForCurrentUser
             .appendingPathComponent(".macpilot", isDirectory: true)
             .appendingPathComponent("index.sqlite3")

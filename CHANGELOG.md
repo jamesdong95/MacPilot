@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Recent-workspaces list (up to 8, persisted) shown on the empty-state card
   for one-click re-index, plus a Settings sheet (gear in the sidebar) showing
   the core, database path, indexed folder, and a "clear recent" action.
+- Runtime Settings: edit the core path and database path in the Settings
+  sheet; applying re-discovers the local core and re-indexes the current
+  folder.
+- Re-index button in the sidebar, and automatic re-index on app activation
+  when the last index is older than 60 seconds.
 - Actionable error messages: timeouts suggest retrying a smaller folder,
   command failures note nothing was changed, invalid output hints the core
   may need an update.

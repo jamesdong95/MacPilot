@@ -23,11 +23,12 @@ final class DemoStore: ObservableObject {
     @Published private(set) var recentWorkspaces: [String]
 
     private(set) var coreDescription: String
-    private let client: MacPilotClient?
+    private(set) var client: MacPilotClient?
     private var searchResults: [DemoFile] = []
     private var operationTask: Task<Void, Never>?
     private var securityScopedWorkspaceURL: URL?
     private var lastIndexURL: URL?
+    private var lastIndexDate: Date?
 
     private static let recentWorkspacesKey = "macpilot.recentWorkspaces"
     private static let recentWorkspacesLimit = 8
@@ -65,6 +66,43 @@ final class DemoStore: ObservableObject {
     func clearRecentWorkspaces() {
         recentWorkspaces = []
         UserDefaults.standard.removeObject(forKey: Self.recentWorkspacesKey)
+    }
+
+    /// Core-path and database-path overrides persisted in UserDefaults.
+    var configuredCliPath: String? {
+        UserDefaults.standard.string(forKey: "macpilot.cliPath")
+    }
+
+    var configuredDatabasePath: String? {
+        UserDefaults.standard.string(forKey: "macpilot.dbPath")
+    }
+
+    /// Persist new core/database paths, re-discover the client, and re-index
+    /// the current folder if one was already chosen.
+    func reconfigure(cliPath: String, databasePath: String) {
+        let cli = cliPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        let db = databasePath.trimmingCharacters(in: .whitespacesAndNewlines)
+        if cli.isEmpty {
+            UserDefaults.standard.removeObject(forKey: "macpilot.cliPath")
+        } else {
+            UserDefaults.standard.set(cli, forKey: "macpilot.cliPath")
+        }
+        if db.isEmpty {
+            UserDefaults.standard.removeObject(forKey: "macpilot.dbPath")
+        } else {
+            UserDefaults.standard.set(db, forKey: "macpilot.dbPath")
+        }
+
+        client = MacPilotClient.discover()
+        coreDescription = client?.displayName ?? "Local Python core unavailable"
+
+        if client == nil {
+            statusMessage = "Local core not found · check the core path in Settings"
+        } else if let current = workspacePath {
+            indexWorkspace(URL(fileURLWithPath: current))
+        } else {
+            statusMessage = "Core reconfigured · choose a folder to index"
+        }
     }
 
     var workspaceName: String {
@@ -138,6 +176,7 @@ final class DemoStore: ObservableObject {
                 self?.actions = coreActions.map(Self.makeActivity)
                 self?.coreStatus = coreStatus
                 self?.rememberWorkspace(workspaceURL.path)
+                self?.lastIndexDate = Date()
                 self?.isBusy = false
                 self?.statusMessage = Self.indexStatus(
                     summary: summary,
@@ -159,6 +198,24 @@ final class DemoStore: ObservableObject {
             return
         }
         indexWorkspace(lastIndexURL)
+    }
+
+    /// Re-index the currently selected workspace.
+    func reindex() {
+        guard let workspacePath else {
+            statusMessage = "Choose a folder before re-indexing"
+            return
+        }
+        indexWorkspace(URL(fileURLWithPath: workspacePath))
+    }
+
+    /// Re-index automatically on app activation only if the last index is
+    /// stale (older than 60s) so external file changes are picked up without
+    /// hammering the core on every focus change.
+    func autoRefreshIfStale() {
+        guard workspacePath != nil, !isBusy else { return }
+        guard let last = lastIndexDate, Date().timeIntervalSince(last) > 60 else { return }
+        reindex()
     }
 
     private func rememberWorkspace(_ path: String) {

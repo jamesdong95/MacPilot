@@ -38,6 +38,9 @@ struct ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResizeNotification)) { _ in
             clampWindowToScreen()
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            store.autoRefreshIfStale()
+        }
         .sheet(isPresented: $showSettings) {
             SettingsView()
         }
@@ -187,6 +190,16 @@ private struct SidebarView: View {
                         .buttonStyle(.bordered)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .disabled(!store.hasCore || store.isBusy)
+                    if store.workspacePath != nil {
+                        Button {
+                            store.reindex()
+                        } label: {
+                            Label("Re-index", systemImage: "arrow.clockwise")
+                        }
+                        .buttonStyle(.bordered)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .disabled(store.isBusy)
+                    }
                 }
 
                 VStack(alignment: .leading, spacing: 6) {
@@ -613,6 +626,8 @@ private struct InspectorRow: View {
 private struct SettingsView: View {
     @EnvironmentObject private var store: DemoStore
     @Environment(\.dismiss) private var dismiss
+    @State private var cliPathText = ""
+    @State private var dbPathText = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -627,11 +642,19 @@ private struct SettingsView: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
             }
-            LabeledContent("Database") {
-                Text(store.databasePath ?? "—")
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
+
+            LabeledContent("Core path (CLI)") {
+                TextField("auto-detect", text: $cliPathText)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(maxWidth: 320)
             }
+
+            LabeledContent("Database path") {
+                TextField("default (~/.macpilot/index.sqlite3)", text: $dbPathText)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(maxWidth: 320)
+            }
+
             LabeledContent("Indexed folder") {
                 Text(store.workspacePath ?? "None")
                     .foregroundStyle(.secondary)
@@ -661,13 +684,21 @@ private struct SettingsView: View {
             Spacer(minLength: 0)
 
             HStack {
+                Button("Apply") {
+                    store.reconfigure(cliPath: cliPathText, databasePath: dbPathText)
+                    dismiss()
+                }
                 Spacer()
                 Button("Done") { dismiss() }
                     .keyboardShortcut(.defaultAction)
             }
         }
         .padding(20)
-        .frame(width: 480, height: 400)
+        .frame(width: 500, height: 460)
+        .onAppear {
+            cliPathText = store.configuredCliPath ?? ""
+            dbPathText = store.configuredDatabasePath ?? store.databasePath ?? ""
+        }
     }
 }
 
