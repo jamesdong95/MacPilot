@@ -92,6 +92,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     commands.add_parser("status", help="Show database and action summary")
+
+    commands.add_parser("duplicates", help="Report duplicate files by content hash")
     return parser
 
 
@@ -162,6 +164,8 @@ def main(argv: list[str] | None = None) -> int:
                 )
             elif args.command == "status":
                 _print(database.status_counts())
+            elif args.command == "duplicates":
+                _print(database.duplicate_groups())
         return 0
     except (OSError, ValueError) as exc:
         print(f"macpilot: {exc}", file=sys.stderr)

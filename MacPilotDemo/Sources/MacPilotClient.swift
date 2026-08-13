@@ -83,6 +83,13 @@ struct CoreStatus: Decodable {
 }
 
 
+struct CoreDuplicateGroup: Decodable {
+    let fingerprint: String
+    let size: Int
+    let paths: [String]
+}
+
+
 struct CoreMovePreview: Decodable {
     let actionId: Int
     let source: String
@@ -287,6 +294,14 @@ struct MacPilotClient {
             CoreMoveOutcome.self,
             command: ["trash", source, "--apply"],
             label: "trash apply"
+        )
+    }
+
+    func duplicates() async throws -> [CoreDuplicateGroup] {
+        try await runAndDecode(
+            [CoreDuplicateGroup].self,
+            command: ["duplicates"],
+            label: "duplicates"
         )
     }
 

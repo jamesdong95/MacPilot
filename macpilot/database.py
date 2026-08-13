@@ -135,6 +135,30 @@ class Database:
             (normalized_root,),
         ).fetchall()
 
+    def duplicate_groups(self) -> list[dict[str, Any]]:
+        """Group indexed text files by identical content (SHA-256 fingerprint)."""
+        connection = self._ensure_open()
+        rows = connection.execute(
+            """
+            SELECT fingerprint, size, COUNT(*) AS count,
+                   GROUP_CONCAT(path, ?) AS paths
+            FROM files
+            WHERE fingerprint != '' AND fingerprint NOT LIKE 'binary:%'
+            GROUP BY fingerprint
+            HAVING count > 1
+            ORDER BY size DESC
+            """,
+            ("\x1f",),
+        ).fetchall()
+        return [
+            {
+                "fingerprint": row["fingerprint"],
+                "size": int(row["size"]),
+                "paths": row["paths"].split("\x1f"),
+            }
+            for row in rows
+        ]
+
     def upsert_file(
         self,
         *,

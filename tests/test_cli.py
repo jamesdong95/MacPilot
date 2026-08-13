@@ -174,6 +174,28 @@ class CliTests(unittest.TestCase):
         self.assertIsNone(payload)
         self.assertIn("limit must be between 1 and 200", error)
 
+    def test_duplicates_groups_identical_content(self) -> None:
+        first = self.workspace / "copy-a.txt"
+        second = self.workspace / "copy-b.txt"
+        distinct = self.workspace / "distinct.txt"
+        first.write_text("same content", encoding="utf-8")
+        second.write_text("same content", encoding="utf-8")
+        distinct.write_text("different content", encoding="utf-8")
+
+        exit_code, _, error = self.run_cli("index", str(self.workspace))
+        self.assertEqual(exit_code, 0, error)
+
+        exit_code, payload, error = self.run_cli("duplicates")
+        self.assertEqual(exit_code, 0, error)
+        self.assertEqual(len(payload), 1)
+        group = payload[0]
+        self.assertEqual(set(group), {"fingerprint", "size", "paths"})
+        self.assertEqual(len(group["paths"]), 2)
+        self.assertEqual(
+            set(Path(p).name for p in group["paths"]),
+            {"copy-a.txt", "copy-b.txt"},
+        )
+
     def test_trash_preview_apply_and_undo(self) -> None:
         import os
 

@@ -4,6 +4,21 @@ All notable changes to MacPilot are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-08-13
+
+### Added
+
+- Working file filters: "All files", "Content" (text files only), and
+  "Recently changed" (modified within 7 days); core list/search now expose
+  `is_text` per result.
+- Safe delete: move an indexed file to the macOS Trash (collision-safe naming)
+  via right-click → "Move to Trash" with a destructive confirmation; the move
+  is recorded and undoable from Activity.
+- Prefix search (partial words still hit) and query-term highlighting in
+  result snippets.
+- Duplicate detection: `duplicates` command reports files grouped by identical
+  content hash.
+
 ## [0.4.0] - 2026-08-13
 
 ### Added
