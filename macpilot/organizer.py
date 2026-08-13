@@ -415,3 +415,48 @@ def trash(database: Database, source: Path | str, *, apply: bool = False) -> Mov
     if not apply:
         return preview_move(source_path, destination)
     return apply_move(database, source_path, destination)
+
+
+def rename_batch(
+    database: Database,
+    root: Path | str,
+    find: str,
+    replace: str,
+    *,
+    apply: bool = False,
+) -> list[dict[str, str | int]]:
+    """Rename files whose name contains `find`, replacing it with `replace`.
+
+    Preview returns a list of {source, destination} without touching anything;
+    apply renames each and records it so every rename is individually undoable.
+    """
+    if not find:
+        raise ValueError("Find pattern must not be empty")
+    root_path = Path(root).expanduser().resolve()
+    plans: list[tuple[Path, Path]] = []
+    for row in database.files_under(root_path):
+        path = Path(row["path"])
+        new_name = path.name.replace(find, replace)
+        if new_name == path.name:
+            continue
+        destination = path.with_name(new_name)
+        plan = preview_move(path, destination)
+        plans.append((plan.source, plan.destination))
+
+    if not apply:
+        return [
+            {"source": str(source), "destination": str(destination)}
+            for source, destination in plans
+        ]
+
+    applied: list[dict[str, str | int]] = []
+    for source, destination in plans:
+        result = apply_move(database, source, destination)
+        applied.append(
+            {
+                "action_id": result.action_id,
+                "source": str(result.source),
+                "destination": str(result.destination),
+            }
+        )
+    return applied

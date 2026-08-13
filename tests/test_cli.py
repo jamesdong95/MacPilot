@@ -237,6 +237,41 @@ class CliTests(unittest.TestCase):
         self.assertEqual(exit_code, 0, error)
         self.assertEqual(payload, [])
 
+    def test_rename_batch_preview_apply_and_undo(self) -> None:
+        first = self.workspace / "photo-1.txt"
+        second = self.workspace / "photo-2.txt"
+        first.write_text("one", encoding="utf-8")
+        second.write_text("two", encoding="utf-8")
+
+        exit_code, _, error = self.run_cli("index", str(self.workspace))
+        self.assertEqual(exit_code, 0, error)
+
+        exit_code, payload, error = self.run_cli(
+            "rename", str(self.workspace), "photo", "pic"
+        )
+        self.assertEqual(exit_code, 0, error)
+        self.assertEqual(payload["mode"], "preview")
+        self.assertEqual(payload["count"], 2)
+        self.assertTrue(first.exists())
+        self.assertFalse((self.workspace / "pic-1.txt").exists())
+
+        exit_code, payload, error = self.run_cli(
+            "rename", str(self.workspace), "photo", "pic", "--apply"
+        )
+        self.assertEqual(exit_code, 0, error)
+        self.assertEqual(payload["mode"], "applied")
+        self.assertEqual(payload["count"], 2)
+        self.assertFalse(first.exists())
+        self.assertTrue((self.workspace / "pic-1.txt").exists())
+        self.assertTrue((self.workspace / "pic-2.txt").exists())
+        action_id = payload["renames"][0]["action_id"]
+        self.assertGreater(action_id, 0)
+
+        exit_code, undo_payload, error = self.run_cli("undo", str(action_id), "--apply")
+        self.assertEqual(exit_code, 0, error)
+        self.assertTrue(first.exists())
+        self.assertFalse((self.workspace / "pic-1.txt").exists())
+
     def test_trash_preview_apply_and_undo(self) -> None:
         import os
 

@@ -9,7 +9,7 @@ from pathlib import Path
 from . import __version__
 from .database import Database
 from .indexer import Indexer
-from .organizer import apply_move, preview_move, suggest, trash, undo_action
+from .organizer import apply_move, preview_move, rename_batch, suggest, trash, undo_action
 from .search import list_indexed, search
 
 
@@ -103,6 +103,16 @@ def build_parser() -> argparse.ArgumentParser:
     rules_add.add_argument("destination", help="Destination directory (relative to root or absolute)")
     rules_remove = rules_sub.add_parser("remove", help="Remove a rule")
     rules_remove.add_argument("rule_id", type=int, help="Rule id from 'rules list'")
+
+    rename_parser = commands.add_parser("rename", help="Batch rename files in a folder")
+    rename_parser.add_argument("root", type=_path)
+    rename_parser.add_argument("find", help="Substring to find in filenames")
+    rename_parser.add_argument("replace", help="Replacement substring")
+    rename_parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="Actually rename the files; without this flag only a preview is produced",
+    )
     return parser
 
 
@@ -194,6 +204,13 @@ def main(argv: list[str] | None = None) -> int:
                             "removed": database.remove_rule(args.rule_id),
                         }
                     )
+            elif args.command == "rename":
+                results = rename_batch(
+                    database, args.root, args.find, args.replace, apply=args.apply
+                )
+                payload = {"count": len(results), "renames": results}
+                payload["mode"] = "applied" if args.apply else "preview"
+                _print(payload)
         return 0
     except (OSError, ValueError) as exc:
         print(f"macpilot: {exc}", file=sys.stderr)
