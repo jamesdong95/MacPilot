@@ -356,11 +356,16 @@ struct MacPilotClient {
         )
     }
 
-    func summarize(path: String, model: String = "qwen2.5:7b") async throws -> CoreSummarize {
+    func summarize(
+        path: String,
+        model: String = "qwen2.5:7b",
+        extraEnvironment: [String: String] = [:]
+    ) async throws -> CoreSummarize {
         try await runAndDecode(
             CoreSummarize.self,
             command: ["summarize", path, "--model", model],
-            label: "summarize"
+            label: "summarize",
+            extraEnvironment: extraEnvironment
         )
     }
 
@@ -408,9 +413,15 @@ struct MacPilotClient {
         _ type: T.Type,
         command: [String],
         label: String,
-        timeout: TimeInterval? = nil
+        timeout: TimeInterval? = nil,
+        extraEnvironment: [String: String] = [:]
     ) async throws -> T {
-        let data = try await run(command: command, label: label, timeout: timeout)
+        let data = try await run(
+            command: command,
+            label: label,
+            timeout: timeout,
+            extraEnvironment: extraEnvironment
+        )
         do {
             let decoder = JSONDecoder()
             decoder.keyDecodingStrategy = .convertFromSnakeCase
@@ -426,7 +437,8 @@ struct MacPilotClient {
     private func run(
         command: [String],
         label: String,
-        timeout: TimeInterval? = nil
+        timeout: TimeInterval? = nil,
+        extraEnvironment: [String: String] = [:]
     ) async throws -> Data {
         let effectiveTimeout = min(timeout ?? self.timeout, Self.maximumTimeout)
         let configuration = configuration
@@ -439,7 +451,8 @@ struct MacPilotClient {
                 arguments: arguments,
                 label: label,
                 timeout: effectiveTimeout,
-                runner: runner
+                runner: runner,
+                extraEnvironment: extraEnvironment
             )
         }
 
@@ -491,7 +504,8 @@ struct MacPilotClient {
         arguments: [String],
         label: String,
         timeout: TimeInterval,
-        runner: ProcessRunner
+        runner: ProcessRunner,
+        extraEnvironment: [String: String] = [:]
     ) async throws -> Data {
         try await withCheckedThrowingContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
@@ -500,6 +514,7 @@ struct MacPilotClient {
                 process.arguments = arguments
                 process.currentDirectoryURL = configuration.workingDirectoryURL
                 process.environment = configuration.environment
+                    .merging(extraEnvironment) { _, new in new }
 
                 let stdoutPipe = Pipe()
                 let stderrPipe = Pipe()

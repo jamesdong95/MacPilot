@@ -400,12 +400,68 @@ class CliTests(unittest.TestCase):
             exit_code, payload, error = self.run_cli("summarize", str(source))
             self.assertEqual(exit_code, 2)
             self.assertIsNone(payload)
-            self.assertIn("Ollama is not reachable", error)
+            self.assertIn("LLM provider is not reachable", error)
         finally:
             if old_url is None:
                 _os.environ.pop("MACPILOT_OLLAMA_URL", None)
             else:
                 _os.environ["MACPILOT_OLLAMA_URL"] = old_url
+
+    def test_summarize_via_mock_cloud_llm(self) -> None:
+        import json as _json
+        import os as _os
+        import threading
+        from http.server import BaseHTTPRequestHandler, HTTPServer
+
+        seen_auth: list[str] = []
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_POST(self) -> None:
+                length = int(self.headers.get("Content-Length", "0"))
+                self.rfile.read(length)
+                seen_auth.append(self.headers.get("Authorization", ""))
+                body = _json.dumps(
+                    {"choices": [{"message": {"content": "Cloud summary."}}]}
+                ).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *args: object) -> None:
+                pass
+
+        server = HTTPServer(("127.0.0.1", 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        port = server.server_address[1]
+
+        source = self.workspace / "doc.txt"
+        source.write_text("A document to summarize via the cloud.", encoding="utf-8")
+
+        saved = {k: _os.environ.get(k) for k in (
+            "MACPILOT_LLM_PROVIDER", "MACPILOT_CLOUD_BASE_URL",
+            "MACPILOT_CLOUD_MODEL", "MACPILOT_CLOUD_API_KEY",
+        )}
+        _os.environ["MACPILOT_LLM_PROVIDER"] = "cloud"
+        _os.environ["MACPILOT_CLOUD_BASE_URL"] = f"http://127.0.0.1:{port}"
+        _os.environ["MACPILOT_CLOUD_MODEL"] = "test-model"
+        _os.environ["MACPILOT_CLOUD_API_KEY"] = "test-key"
+        try:
+            exit_code, payload, error = self.run_cli("summarize", str(source))
+            self.assertEqual(exit_code, 0, error)
+            self.assertEqual(payload["summary"], "Cloud summary.")
+            self.assertEqual(payload["model"], "qwen2.5:7b")
+            self.assertEqual(seen_auth, ["Bearer test-key"])
+        finally:
+            server.shutdown()
+            server.server_close()
+            for key, value in saved.items():
+                if value is None:
+                    _os.environ.pop(key, None)
+                else:
+                    _os.environ[key] = value
 
 
 if __name__ == "__main__":

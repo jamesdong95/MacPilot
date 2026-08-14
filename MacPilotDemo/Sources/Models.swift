@@ -1,4 +1,5 @@
 import Foundation
+import Security
 
 
 enum AppSection: String, CaseIterable, Hashable, Identifiable {
@@ -58,6 +59,62 @@ struct OrgRule: Identifiable, Hashable {
 struct FileSummary: Hashable {
     let fileID: String
     let text: String
+}
+
+enum LLMProvider: String, CaseIterable, Identifiable {
+    case ollama
+    case cloud
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .ollama: return "Local (Ollama)"
+        case .cloud: return "Cloud API"
+        }
+    }
+}
+
+/// Minimal Keychain wrapper for storing the optional cloud LLM API key.
+/// The key is never written to UserDefaults or the repository.
+enum KeychainHelper {
+    private static let service = "com.calma.macpilot.demo.llm"
+
+    static func set(_ value: String, for key: String) {
+        let data = Data(value.utf8)
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: key,
+        ]
+        SecItemDelete(query as CFDictionary)
+        var addQuery = query
+        addQuery[kSecValueData as String] = data
+        SecItemAdd(addQuery as CFDictionary, nil)
+    }
+
+    static func get(_ key: String) -> String? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: key,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+        ]
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        guard status == errSecSuccess, let data = result as? Data else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    static func delete(_ key: String) {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: key,
+        ]
+        SecItemDelete(query as CFDictionary)
+    }
 }
 
 struct DemoFile: Identifiable, Hashable {

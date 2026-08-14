@@ -4,6 +4,15 @@ All notable changes to MacPilot are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-08-13
+
+### Added
+
+- Configurable LLM provider for summarization: connect a local Ollama server
+  or any OpenAI-compatible cloud API (base URL + model + API key). The API key
+  is stored in the macOS Keychain, never in the app or the repository.
+  Configured via Settings → Local AI.
+
 ## [0.7.0] - 2026-08-13
 
 ### Added

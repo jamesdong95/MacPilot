@@ -854,6 +854,45 @@ private struct SettingsView: View {
                     .frame(maxWidth: 320)
             }
 
+            Divider()
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Local AI")
+                    .font(.headline)
+                    .lineLimit(1)
+                Picker("Provider", selection: $store.llmProvider) {
+                    ForEach(LLMProvider.allCases) { provider in
+                        Text(provider.title).tag(provider)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+
+                if store.llmProvider == .cloud {
+                    LabeledContent("Base URL") {
+                        TextField("https://api.openai.com", text: $store.cloudBaseURL)
+                            .textFieldStyle(.roundedBorder)
+                    }
+                    LabeledContent("Model") {
+                        TextField("gpt-4o-mini", text: $store.cloudModel)
+                            .textFieldStyle(.roundedBorder)
+                    }
+                    LabeledContent("API key") {
+                        SecureField("sk-…", text: $store.cloudAPIKey)
+                            .textFieldStyle(.roundedBorder)
+                    }
+                    Text("The API key is stored in the macOS Keychain, never in the app or the repository.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Button("Save AI settings") {
+                    store.saveLLMConfig()
+                }
+                .buttonStyle(.bordered)
+            }
+
             LabeledContent("Indexed folder") {
                 Text(store.workspacePath ?? "None")
                     .foregroundStyle(.secondary)
@@ -946,7 +985,7 @@ private struct SettingsView: View {
             }
         }
         .padding(20)
-        .frame(width: 500, height: 640)
+        .frame(width: 520, height: 780)
         .onAppear {
             cliPathText = store.configuredCliPath ?? ""
             dbPathText = store.configuredDatabasePath ?? store.databasePath ?? ""

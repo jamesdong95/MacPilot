@@ -17,6 +17,10 @@ final class DemoStore: ObservableObject {
     @Published private(set) var rules: [OrgRule] = []
     @Published private(set) var fileSummary: FileSummary?
     @Published private(set) var summarizingFile = false
+    @Published var llmProvider: LLMProvider = .ollama
+    @Published var cloudBaseURL = ""
+    @Published var cloudModel = "gpt-4o-mini"
+    @Published var cloudAPIKey = ""
     @Published private(set) var files: [DemoFile] = []
     @Published private(set) var suggestions: [DemoSuggestion] = []
     @Published private(set) var actions: [ActivityEntry] = []
@@ -45,6 +49,12 @@ final class DemoStore: ObservableObject {
             : "Choose a folder to index · no files will be changed"
         self.recentWorkspaces = (UserDefaults.standard
             .stringArray(forKey: Self.recentWorkspacesKey)) ?? []
+        self.llmProvider = LLMProvider(
+            rawValue: UserDefaults.standard.string(forKey: "macpilot.llmProvider") ?? ""
+        ) ?? .ollama
+        self.cloudBaseURL = UserDefaults.standard.string(forKey: "macpilot.cloudBaseURL") ?? ""
+        self.cloudModel = UserDefaults.standard.string(forKey: "macpilot.cloudModel") ?? "gpt-4o-mini"
+        self.cloudAPIKey = KeychainHelper.get("cloudAPIKey") ?? ""
     }
 
     deinit {
@@ -253,6 +263,35 @@ final class DemoStore: ObservableObject {
         indexWorkspace(target)
     }
 
+    /// Persist LLM provider settings. The API key goes to the Keychain, never
+    /// to UserDefaults or the repository.
+    func saveLLMConfig() {
+        UserDefaults.standard.set(llmProvider.rawValue, forKey: "macpilot.llmProvider")
+        UserDefaults.standard.set(cloudBaseURL, forKey: "macpilot.cloudBaseURL")
+        UserDefaults.standard.set(cloudModel, forKey: "macpilot.cloudModel")
+        if cloudAPIKey.isEmpty {
+            KeychainHelper.delete("cloudAPIKey")
+        } else {
+            KeychainHelper.set(cloudAPIKey, for: "cloudAPIKey")
+        }
+        statusMessage = "LLM settings saved · local only"
+    }
+
+    /// Environment overrides handed to the core for summarize calls so the
+    /// selected provider (local Ollama or a cloud API) is honoured.
+    func cloudEnvironment() -> [String: String] {
+        var env: [String: String] = [:]
+        env["MACPILOT_LLM_PROVIDER"] = llmProvider.rawValue
+        if llmProvider == .cloud {
+            env["MACPILOT_CLOUD_BASE_URL"] = cloudBaseURL
+            env["MACPILOT_CLOUD_MODEL"] = cloudModel
+            if !cloudAPIKey.isEmpty {
+                env["MACPILOT_CLOUD_API_KEY"] = cloudAPIKey
+            }
+        }
+        return env
+    }
+
     private func rememberWorkspace(_ path: String) {
         var workspaces = recentWorkspaces.filter { $0 != path }
         workspaces.insert(path, at: 0)
@@ -443,16 +482,20 @@ final class DemoStore: ObservableObject {
         }
         summarizingFile = true
         fileSummary = nil
-        statusMessage = "Summarizing \(file.name) locally…"
+        statusMessage = "Summarizing \(file.name)…"
         operationTask?.cancel()
+        let environment = cloudEnvironment()
 
         operationTask = Task { [weak self] in
             do {
-                let result = try await client.summarize(path: file.path)
+                let result = try await client.summarize(
+                    path: file.path,
+                    extraEnvironment: environment
+                )
                 guard !Task.isCancelled else { return }
                 self?.fileSummary = FileSummary(fileID: file.id, text: result.summary)
                 self?.summarizingFile = false
-                self?.statusMessage = "Summary ready · local only"
+                self?.statusMessage = "Summary ready"
             } catch {
                 guard !Task.isCancelled else { return }
                 self?.summarizingFile = false
