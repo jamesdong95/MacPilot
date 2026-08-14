@@ -168,6 +168,7 @@ private struct SidebarView: View {
                 .buttonStyle(.borderless)
                 .help("Settings")
                 .accessibilityLabel("Settings")
+                .keyboardShortcut(",", modifiers: .command)
             }
             .padding(.horizontal, 14)
             .padding(.top, 14)
@@ -253,6 +254,7 @@ private struct SearchView: View {
     @EnvironmentObject private var store: DemoStore
     @State private var fileToTrash: DemoFile?
     @State private var showSummaries = false
+    @FocusState private var searchFocused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -286,6 +288,8 @@ private struct SearchView: View {
                     .textFieldStyle(.plain)
                     .font(.title3)
                     .disabled(store.isBusy)
+                    .focused($searchFocused)
+                    .accessibilityLabel("Search files")
                 if !store.query.isEmpty {
                     Button { store.query = "" } label: {
                         Image(systemName: "xmark.circle.fill")
@@ -451,6 +455,12 @@ private struct SearchView: View {
         }
         .sheet(isPresented: $showSummaries) {
             SummariesSheet(summaries: store.batchSummaries)
+        }
+        .onAppear { searchFocused = true }
+        .background {
+            Button("") { searchFocused = true }
+                .keyboardShortcut("f", modifiers: .command)
+                .opacity(0)
         }
     }
 }
