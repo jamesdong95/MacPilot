@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   3-step guide and a plain-language "everything stays on this Mac" promise.
 - Local diagnostics log (opt-in, never uploaded) with open/clear actions in
   Settings.
+- Filesystem hardening: iCloud `.icloud` placeholders are skipped (no forced
+  downloads), permission-denied directories are counted not fatal, and the
+  chosen folder's security-scoped access is restored on relaunch.
 
 ## [0.8.0] - 2026-08-13
 
