@@ -32,6 +32,20 @@ DEFAULT_CLOUD_EMBED_MODEL = "text-embedding-3-small"
 REQUEST_TIMEOUT = 180
 _MAX_SUMMARY_CHARS = 8000
 
+# Semantic tags for auto-classification. Each value is a short description that
+# is embedded and compared against a file's content embedding.
+TAG_DEFINITIONS = {
+    "invoice": "an invoice or bill requesting payment with amounts, line items, and due dates",
+    "contract": "a legal contract or agreement with terms, parties, and signatures",
+    "receipt": "a receipt or proof-of-purchase transaction record",
+    "resume": "a resume or CV listing work experience, skills, and education",
+    "report": "a report or analysis document with findings, data, and conclusions",
+    "notes": "personal notes, meeting notes, or a short memo",
+    "screenshot": "a screenshot or screen capture image",
+    "photo": "a photograph or picture",
+}
+_TAG_THRESHOLD = 0.30
+
 
 class LLMUnavailableError(RuntimeError):
     """Raised when the selected LLM provider cannot be reached or responds badly."""
@@ -193,3 +207,47 @@ def embed_texts(
         return _cloud_embed(texts, base_url, api_key, embed_model)
     embed_model = model or os.environ.get("MACPILOT_EMBED_MODEL", DEFAULT_EMBED_MODEL)
     return [_ollama_embed(text, embed_model) for text in texts]
+
+
+def _cosine(a: list[float], b: list[float]) -> float:
+    dot = sum(x * y for x, y in zip(a, b))
+    norm_a = sum(x * x for x in a) ** 0.5
+    norm_b = sum(y * y for y in b) ** 0.5
+    if norm_a == 0 or norm_b == 0:
+        return 0.0
+    return dot / (norm_a * norm_b)
+
+
+def classify_tag(
+    text: str,
+    *,
+    provider: str | None = None,
+    model: str | None = None,
+) -> str | None:
+    """Classify `text` into the closest predefined tag, or None if unsure.
+
+    Embeds the text and every tag description in one batch, then returns the
+    highest-similarity tag above a threshold. Best-effort: never raises for
+    provider failures (the caller treats it as optional enrichment).
+    """
+    if not text.strip():
+        return None
+    try:
+        vectors = embed_texts(
+            [text] + list(TAG_DEFINITIONS.values()),
+            provider=provider,
+            model=model,
+        )
+    except LLMUnavailableError:
+        return None
+    if len(vectors) != 1 + len(TAG_DEFINITIONS):
+        return None
+    text_vector = vectors[0]
+    best_tag: str | None = None
+    best_score = -1.0
+    for (tag, _), vector in zip(TAG_DEFINITIONS.items(), vectors[1:]):
+        score = _cosine(text_vector, vector)
+        if score > best_score:
+            best_score = score
+            best_tag = tag
+    return best_tag if best_score >= _TAG_THRESHOLD else None

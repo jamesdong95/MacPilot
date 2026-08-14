@@ -206,6 +206,7 @@ struct DemoFile: Identifiable, Hashable {
     let snippet: String
     let isText: Bool
     let modifiedAt: Date?
+    let tag: String?
 
     init(
         id: String? = nil,
@@ -216,7 +217,8 @@ struct DemoFile: Identifiable, Hashable {
         modified: String,
         snippet: String,
         isText: Bool = false,
-        modifiedAt: Date? = nil
+        modifiedAt: Date? = nil,
+        tag: String? = nil
     ) {
         self.id = id ?? path
         self.name = name
@@ -227,6 +229,7 @@ struct DemoFile: Identifiable, Hashable {
         self.snippet = snippet
         self.isText = isText
         self.modifiedAt = modifiedAt
+        self.tag = tag
     }
 
     var icon: String {

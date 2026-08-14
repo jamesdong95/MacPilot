@@ -122,6 +122,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     commands.add_parser("storage", help="Summarize disk usage (largest, stale, screenshots, duplicates)")
 
+    tags_parser = commands.add_parser("tags", help="List auto-assigned tags and their files")
+    tags_parser.add_argument("tag_name", nargs="?", help="Show files with a specific tag")
+
     rules_parser = commands.add_parser("rules", help="Manage organization rules")
     rules_sub = rules_parser.add_subparsers(dest="rules_action", required=True)
     rules_sub.add_parser("list", help="List rules")
@@ -244,6 +247,15 @@ def main(argv: list[str] | None = None) -> int:
                 _print(database.duplicate_groups())
             elif args.command == "storage":
                 _print(database.storage_report())
+            elif args.command == "tags":
+                if args.tag_name:
+                    _print([dict(row) for row in database.files_with_tag(args.tag_name)])
+                else:
+                    rows = database.connection.execute(
+                        "SELECT tag, COUNT(*) AS count FROM file_tags "
+                        "GROUP BY tag ORDER BY count DESC"
+                    ).fetchall()
+                    _print([{"tag": row["tag"], "count": int(row["count"])} for row in rows])
             elif args.command == "rules":
                 if args.rules_action == "list":
                     _print([dict(row) for row in database.list_rules()])

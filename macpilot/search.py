@@ -50,6 +50,7 @@ def search(database, query: str, limit: int = 20) -> list[SearchResult]:
             snippet=row["snippet"] or row["name"],
             score=float(-row["rank"]),
             is_text=bool(row["is_text"]),
+            tag=database.tag_for(int(row["id"])),
         )
         for row in rows
     ]
@@ -76,6 +77,7 @@ def list_indexed(
             snippet=row["name"],
             score=0.0,
             is_text=bool(row["is_text"]),
+            tag=database.tag_for(int(row["id"])),
         )
         for row in rows
     ]
@@ -123,6 +125,7 @@ def semantic_search(database, query: str, limit: int = 20) -> list[SearchResult]
                 snippet=row["name"],
                 score=float(score),
                 is_text=bool(row["is_text"]),
+                tag=database.tag_for(file_id),
             )
         )
     return results

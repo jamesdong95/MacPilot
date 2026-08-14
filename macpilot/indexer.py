@@ -109,8 +109,13 @@ class Indexer:
                             if file_id is not None:
                                 vector = embed_texts([content[:2000]])[0]
                                 self.database.save_embedding(file_id, vector)
+                                from .semantic import classify_tag
+
+                                tag = classify_tag(content[:2000])
+                                if tag:
+                                    self.database.set_file_tag(file_id, tag)
                         except Exception:
-                            # Embedding is best-effort; never blocks indexing.
+                            # Embedding/tagging is best-effort; never blocks indexing.
                             pass
                 except (OSError, UnicodeError):
                     # A file that disappears mid-walk, loses permission, or is

@@ -93,6 +93,13 @@ class Database:
                 FOREIGN KEY (file_id) REFERENCES files(id)
             );
 
+            CREATE TABLE IF NOT EXISTS file_tags (
+                file_id INTEGER NOT NULL,
+                tag TEXT NOT NULL,
+                PRIMARY KEY (file_id, tag),
+                FOREIGN KEY (file_id) REFERENCES files(id)
+            );
+
             CREATE INDEX IF NOT EXISTS idx_files_root_path ON files(root_path);
             CREATE INDEX IF NOT EXISTS idx_suggestions_status
                 ON suggestions(status);
@@ -221,6 +228,30 @@ class Database:
     def file_id_for(self, path: str | Path) -> int | None:
         row = self.file_record(path)
         return int(row["id"]) if row is not None else None
+
+    def set_file_tag(self, file_id: int, tag: str) -> None:
+        connection = self._ensure_open()
+        connection.execute(
+            "INSERT OR REPLACE INTO file_tags (file_id, tag) VALUES (?, ?)",
+            (file_id, tag),
+        )
+        connection.commit()
+
+    def tag_for(self, file_id: int) -> str | None:
+        connection = self._ensure_open()
+        row = connection.execute(
+            "SELECT tag FROM file_tags WHERE file_id = ?", (file_id,)
+        ).fetchone()
+        return str(row["tag"]) if row is not None else None
+
+    def files_with_tag(self, tag: str, *, limit: int = 200) -> list[sqlite3.Row]:
+        connection = self._ensure_open()
+        return connection.execute(
+            "SELECT f.* FROM files f "
+            "JOIN file_tags t ON t.file_id = f.id "
+            "WHERE t.tag = ? ORDER BY f.mtime_ns DESC LIMIT ?",
+            (tag, limit),
+        ).fetchall()
 
     def storage_report(self, *, top: int = 10) -> dict[str, Any]:
         """Summarize disk usage: totals, largest files, stale files, screenshots, duplicates."""

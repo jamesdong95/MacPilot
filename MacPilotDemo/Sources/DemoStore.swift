@@ -887,7 +887,8 @@ final class DemoStore: ObservableObject {
             modified: displayDate(result.modifiedAt),
             snippet: result.snippet,
             isText: result.isText ?? false,
-            modifiedAt: parseDate(result.modifiedAt)
+            modifiedAt: parseDate(result.modifiedAt),
+            tag: result.tag
         )
     }
 

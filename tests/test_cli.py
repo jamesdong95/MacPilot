@@ -97,7 +97,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(len(list_payload), 3)
         self.assertEqual(
             set(list_payload[0]),
-            {"file_id", "path", "filename", "extension", "size", "modified_at", "snippet", "score", "is_text"},
+            {"file_id", "path", "filename", "extension", "size", "modified_at", "snippet", "score", "is_text", "tag"},
         )
 
         exit_code, search_payload, error = self.run_cli("search", "invoice")
@@ -252,6 +252,58 @@ class CliTests(unittest.TestCase):
             self.assertEqual(len(payload), 2)
             self.assertIn("score", payload[0])
             self.assertIn("is_text", payload[0])
+        finally:
+            server.shutdown()
+            server.server_close()
+            for key, value in saved.items():
+                if value is None:
+                    _os.environ.pop(key, None)
+                else:
+                    _os.environ[key] = value
+
+    def test_auto_tag_via_mock_embedding(self) -> None:
+        import json as _json
+        import os as _os
+        import threading
+        from http.server import BaseHTTPRequestHandler, HTTPServer
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_POST(self) -> None:
+                length = int(self.headers.get("Content-Length", "0"))
+                self.rfile.read(length)
+                body = _json.dumps({"embedding": [1.0, 0.0]}).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *args: object) -> None:
+                pass
+
+        server = HTTPServer(("127.0.0.1", 0), Handler)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        port = server.server_address[1]
+
+        doc = self.workspace / "doc.txt"
+        doc.write_text("a document about anything", encoding="utf-8")
+
+        saved = {k: _os.environ.get(k) for k in ("MACPILOT_OLLAMA_URL", "MACPILOT_LLM_PROVIDER")}
+        _os.environ["MACPILOT_OLLAMA_URL"] = f"http://127.0.0.1:{port}"
+        _os.environ["MACPILOT_LLM_PROVIDER"] = "ollama"
+        try:
+            exit_code, _, error = self.run_cli("index", str(self.workspace), "--embed")
+            self.assertEqual(exit_code, 0, error)
+
+            exit_code, payload, error = self.run_cli("tags")
+            self.assertEqual(exit_code, 0, error)
+            tags = {item["tag"]: item["count"] for item in payload}
+            self.assertGreaterEqual(sum(tags.values()), 1)
+
+            exit_code, payload, error = self.run_cli("tags", "invoice")
+            self.assertEqual(exit_code, 0, error)
+            self.assertEqual(len(payload), 1)
+            self.assertIn("name", payload[0])
         finally:
             server.shutdown()
             server.server_close()

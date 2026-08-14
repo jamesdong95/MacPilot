@@ -27,6 +27,7 @@ class SearchResult:
     snippet: str
     score: float
     is_text: bool = False
+    tag: str | None = None
 
 
 @dataclass(frozen=True)

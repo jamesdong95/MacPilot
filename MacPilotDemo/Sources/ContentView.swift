@@ -880,9 +880,20 @@ private struct FileRow: View {
                     .frame(width: 30, height: 30)
                     .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(file.name)
-                        .font(.body.weight(.semibold))
-                        .lineLimit(1)
+                    HStack(spacing: 6) {
+                        Text(file.name)
+                            .font(.body.weight(.semibold))
+                            .lineLimit(1)
+                        if let tag = file.tag {
+                            Text(tag)
+                                .font(.caption2.weight(.semibold))
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.accentColor.opacity(0.15), in: Capsule())
+                                .foregroundStyle(Color.accentColor)
+                                .lineLimit(1)
+                        }
+                    }
                     Text(highlightedSnippet)
                         .font(.caption)
                         .foregroundStyle(.secondary)
