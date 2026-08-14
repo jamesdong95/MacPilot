@@ -2,8 +2,37 @@ import SwiftUI
 import AppKit
 
 
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        // With a MenuBarExtra present, macOS may not open the main window on
+        // launch, so bring it up explicitly (after SwiftUI creates it).
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            Self.openMainWindow()
+        }
+    }
+
+    func applicationShouldHandleReopen(
+        _ sender: NSApplication,
+        hasVisibleWindows flag: Bool
+    ) -> Bool {
+        // Clicking the Dock icon when no window is visible reopens it.
+        Self.openMainWindow()
+        return true
+    }
+
+    static func openMainWindow() {
+        NSApp.activate(ignoringOtherApps: true)
+        if let window = NSApp.windows.first(where: { $0.isVisible || $0.canBecomeMain })
+            ?? NSApp.windows.first {
+            window.makeKeyAndOrderFront(nil)
+        }
+    }
+}
+
+
 @main
 struct MacPilotDemoApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var store = DemoStore()
     private static var hotkeyMonitor: Any?
 
@@ -15,15 +44,13 @@ struct MacPilotDemoApp: App {
                   event.modifierFlags.contains(.shift),
                   event.keyCode == 49 else { return }
             DispatchQueue.main.async {
-                NSApp.activate(ignoringOtherApps: true)
-                NSApp.windows.first(where: { $0.isVisible || $0.canBecomeMain })?
-                    .makeKeyAndOrderFront(nil)
+                AppDelegate.openMainWindow()
             }
         }
     }
 
     var body: some Scene {
-        WindowGroup("MacPilot Demo") {
+        WindowGroup("MacPilot") {
             ContentView()
                 .environmentObject(store)
         }
@@ -50,7 +77,7 @@ struct MacPilotDemoApp: App {
             }
             Divider()
             Button("Open MacPilot") {
-                openMainWindow()
+                AppDelegate.openMainWindow()
             }
             Button("Quit MacPilot") {
                 NSApp.terminate(nil)
@@ -61,13 +88,6 @@ struct MacPilotDemoApp: App {
                 .foregroundStyle(.secondary)
         } label: {
             Image(systemName: "sparkle.magnifyingglass")
-        }
-    }
-
-    private func openMainWindow() {
-        NSApp.activate(ignoringOtherApps: true)
-        if let window = NSApp.windows.first(where: { $0.isVisible || $0.canBecomeMain }) {
-            window.makeKeyAndOrderFront(nil)
         }
     }
 }
