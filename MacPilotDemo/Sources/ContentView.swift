@@ -166,8 +166,8 @@ private struct SidebarView: View {
                         .font(.system(size: 13))
                 }
                 .buttonStyle(.borderless)
-                .help("Settings")
-                .accessibilityLabel("Settings")
+                .help(L10n.t("settings"))
+                .accessibilityLabel(L10n.t("settings"))
                 .keyboardShortcut(",", modifiers: .command)
             }
             .padding(.horizontal, 14)
@@ -232,7 +232,7 @@ private struct SidebarView: View {
                         }
                         Spacer()
                     }
-                    Button("Choose folder…") { store.chooseWorkspace() }
+                    Button(L10n.t("choose.folder")) { store.chooseWorkspace() }
                         .buttonStyle(.bordered)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .disabled(!store.hasCore || store.isBusy)
@@ -240,7 +240,7 @@ private struct SidebarView: View {
                         Button {
                             store.reindex()
                         } label: {
-                            Label("Re-index", systemImage: "arrow.clockwise")
+                            Label(L10n.t("reindex"), systemImage: "arrow.clockwise")
                         }
                         .buttonStyle(.bordered)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1135,6 +1135,7 @@ private struct SettingsView: View {
     @State private var dbPathText = ""
     @State private var newRulePattern = ""
     @State private var newRuleDestination = ""
+    @State private var languageCode = L10n.language
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -1143,6 +1144,20 @@ private struct SettingsView: View {
                 .lineLimit(1)
 
             Divider()
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Language")
+                    .font(.headline)
+                Picker("Language", selection: $languageCode) {
+                    Text("English").tag("en")
+                    Text("Tiếng Việt").tag("vi")
+                }
+                .pickerStyle(.segmented)
+                .frame(maxWidth: 280)
+                .onChange(of: languageCode) { code in
+                    L10n.setLanguage(code)
+                }
+            }
 
             LabeledContent("Core") {
                 Text(store.coreDescription)
@@ -1315,7 +1330,7 @@ private struct SettingsView: View {
             }
         }
         .padding(20)
-        .frame(width: 520, height: 860)
+        .frame(width: 520, height: 940)
         .onAppear {
             cliPathText = store.configuredCliPath ?? ""
             dbPathText = store.configuredDatabasePath ?? store.databasePath ?? ""

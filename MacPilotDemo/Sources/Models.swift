@@ -13,21 +13,21 @@ enum AppSection: String, CaseIterable, Hashable, Identifiable {
 
     var title: String {
         switch self {
-        case .search: return "Search"
-        case .suggestions: return "Suggestions"
-        case .activity: return "Activity"
-        case .duplicates: return "Duplicates"
-        case .storage: return "Storage"
+        case .search: return L10n.t("search")
+        case .suggestions: return L10n.t("suggestions")
+        case .activity: return L10n.t("activity")
+        case .duplicates: return L10n.t("duplicates")
+        case .storage: return L10n.t("storage")
         }
     }
 
     var subtitle: String {
         switch self {
-        case .search: return "Find files instantly"
-        case .suggestions: return "Review move previews"
-        case .activity: return "Local action history"
-        case .duplicates: return "Reclaim space safely"
-        case .storage: return "See what's using space"
+        case .search: return L10n.t("search.subtitle")
+        case .suggestions: return L10n.t("suggestions.subtitle")
+        case .activity: return L10n.t("activity.subtitle")
+        case .duplicates: return L10n.t("duplicates.subtitle")
+        case .storage: return L10n.t("storage.subtitle")
         }
     }
 
@@ -120,6 +120,44 @@ struct SavedSearch: Identifiable, Hashable {
     let id: Int
     let name: String
     let query: String
+}
+
+/// Minimal runtime localization (English + Vietnamese) without an .xcstrings
+/// catalog, so the app can switch languages without a rebuild.
+enum L10n {
+    static let languageKey = "macpilot.language"
+
+    static var language: String {
+        UserDefaults.standard.string(forKey: languageKey) ?? "en"
+    }
+
+    static func setLanguage(_ code: String) {
+        UserDefaults.standard.set(code, forKey: languageKey)
+    }
+
+    static func t(_ key: String) -> String {
+        table[key]?[language] ?? table[key]?["en"] ?? key
+    }
+
+    private static let table: [String: [String: String]] = [
+        "search": ["en": "Search", "vi": "Tìm kiếm"],
+        "search.subtitle": ["en": "Find files instantly", "vi": "Tìm file tức thì"],
+        "suggestions": ["en": "Suggestions", "vi": "Gợi ý"],
+        "suggestions.subtitle": ["en": "Review move previews", "vi": "Xem trước di chuyển"],
+        "activity": ["en": "Activity", "vi": "Hoạt động"],
+        "activity.subtitle": ["en": "Local action history", "vi": "Lịch sử hành động"],
+        "duplicates": ["en": "Duplicates", "vi": "Trùng lặp"],
+        "duplicates.subtitle": ["en": "Reclaim space safely", "vi": "Giải phóng dung lượng an toàn"],
+        "storage": ["en": "Storage", "vi": "Dung lượng"],
+        "storage.subtitle": ["en": "See what's using space", "vi": "Xem thứ gì đang chiếm chỗ"],
+        "choose.folder": ["en": "Choose folder…", "vi": "Chọn thư mục…"],
+        "reindex": ["en": "Re-index", "vi": "Đánh chỉ mục lại"],
+        "settings": ["en": "Settings", "vi": "Cài đặt"],
+        "summarize": ["en": "Summarize", "vi": "Tóm tắt"],
+        "save": ["en": "Save", "vi": "Lưu"],
+        "cancel": ["en": "Cancel", "vi": "Hủy"],
+        "done": ["en": "Done", "vi": "Xong"],
+    ]
 }
 
 enum LLMProvider: String, CaseIterable, Identifiable {
