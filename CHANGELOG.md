@@ -4,6 +4,16 @@ All notable changes to MacPilot are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0] - 2026-08-13
+
+### Added
+
+- Auto-tag: text files are classified into semantic tags (invoice, contract,
+  receipt, resume, report, notes, screenshot, photo) during `index --embed`;
+  search results show a tag badge, and a `tags` CLI command lists them.
+- Batch summarize: a "Summarize" button summarizes every visible text file in
+  one pass and shows the results in a sheet.
+
 ## [0.10.0] - 2026-08-13
 
 ### Added
