@@ -21,6 +21,8 @@ final class DemoStore: ObservableObject {
     @Published private(set) var indexProgress: Int?
     @Published private(set) var duplicateGroups: [DuplicateGroup] = []
     @Published private(set) var storageReport: StorageReport?
+    @Published private(set) var batchSummaries: [BatchSummary] = []
+    @Published private(set) var batchSummarizing = false
     @Published var llmProvider: LLMProvider = .ollama
     @Published var cloudBaseURL = ""
     @Published var cloudModel = "gpt-4o-mini"
@@ -649,6 +651,48 @@ final class DemoStore: ObservableObject {
             } catch {
                 guard !Task.isCancelled else { return }
                 self?.summarizingFile = false
+                self?.statusMessage = Self.errorMessage(error)
+            }
+        }
+    }
+
+    func summarizeBatch(_ files: [DemoFile]) {
+        guard let client else {
+            statusMessage = "Local core unavailable · summarize could not run"
+            return
+        }
+        let textFiles = files.filter(\.isText)
+        guard !textFiles.isEmpty else {
+            statusMessage = "Select text files to summarize"
+            return
+        }
+        guard !batchSummarizing else { return }
+        batchSummarizing = true
+        batchSummaries = []
+        statusMessage = "Summarizing \(textFiles.count) files…"
+        operationTask?.cancel()
+        let environment = cloudEnvironment()
+
+        operationTask = Task { [weak self] in
+            do {
+                let results = try await client.summarizeBatch(
+                    paths: textFiles.map(\.path),
+                    extraEnvironment: environment
+                )
+                guard !Task.isCancelled else { return }
+                self?.batchSummaries = results.compactMap { item in
+                    guard let summary = item.summary else { return nil }
+                    return BatchSummary(
+                        id: item.path,
+                        name: URL(fileURLWithPath: item.path).lastPathComponent,
+                        summary: summary
+                    )
+                }
+                self?.batchSummarizing = false
+                self?.statusMessage = "Summarized \(self?.batchSummaries.count ?? 0) files"
+            } catch {
+                guard !Task.isCancelled else { return }
+                self?.batchSummarizing = false
                 self?.statusMessage = Self.errorMessage(error)
             }
         }

@@ -160,6 +160,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_MODEL,
         help=f"Ollama model to use (default: {DEFAULT_MODEL})",
     )
+
+    summarize_batch_parser = commands.add_parser(
+        "summarize-batch", help="Summarize multiple text files"
+    )
+    summarize_batch_parser.add_argument("paths", nargs="+", type=_path)
     return parser
 
 
@@ -296,6 +301,14 @@ def main(argv: list[str] | None = None) -> int:
                         "summary": summary,
                     }
                 )
+            elif args.command == "summarize-batch":
+                results = []
+                for p in args.paths:
+                    try:
+                        results.append({"path": str(p), "summary": summarize_file(p)})
+                    except Exception as exc:  # noqa: BLE001 - keep the batch going
+                        results.append({"path": str(p), "error": str(exc)})
+                _print(results)
         return 0
     except (OSError, ValueError, OllamaUnavailableError) as exc:
         print(f"macpilot: {exc}", file=sys.stderr)

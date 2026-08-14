@@ -114,6 +114,12 @@ struct CoreSummarize: Decodable {
     let summary: String
 }
 
+struct CoreBatchSummary: Decodable {
+    let path: String
+    let summary: String?
+    let error: String?
+}
+
 
 struct CoreRenameItem: Decodable {
     let source: String?
@@ -413,6 +419,19 @@ struct MacPilotClient {
             CoreSummarize.self,
             command: ["summarize", path, "--model", model],
             label: "summarize",
+            extraEnvironment: extraEnvironment
+        )
+    }
+
+    func summarizeBatch(
+        paths: [String],
+        extraEnvironment: [String: String] = [:]
+    ) async throws -> [CoreBatchSummary] {
+        try await runAndDecode(
+            [CoreBatchSummary].self,
+            command: ["summarize-batch"] + paths,
+            label: "summarize batch",
+            timeout: 600,
             extraEnvironment: extraEnvironment
         )
     }

@@ -110,6 +110,12 @@ struct StorageReport {
     }
 }
 
+struct BatchSummary: Identifiable {
+    let id: String
+    let name: String
+    let summary: String
+}
+
 enum LLMProvider: String, CaseIterable, Identifiable {
     case ollama
     case cloud

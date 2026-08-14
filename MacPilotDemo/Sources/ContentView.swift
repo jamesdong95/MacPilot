@@ -252,6 +252,7 @@ private struct SidebarView: View {
 private struct SearchView: View {
     @EnvironmentObject private var store: DemoStore
     @State private var fileToTrash: DemoFile?
+    @State private var showSummaries = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -327,7 +328,19 @@ private struct SearchView: View {
                     .font(.caption.weight(.medium))
                     .foregroundStyle(.green)
                     .lineLimit(1)
+                if !store.filteredFiles.isEmpty {
+                    Button {
+                        store.summarizeBatch(store.filteredFiles)
+                        showSummaries = true
+                    } label: {
+                        Label("Summarize", systemImage: "text.alignleft")
+                            .font(.caption.weight(.medium))
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .disabled(store.batchSummarizing)
                     .fixedSize()
+                }
             }
             .layoutPriority(1)
 
@@ -436,6 +449,51 @@ private struct SearchView: View {
         } message: {
             Text("The file is moved to the macOS Trash and can be undone from Activity.")
         }
+        .sheet(isPresented: $showSummaries) {
+            SummariesSheet(summaries: store.batchSummaries)
+        }
+    }
+}
+
+private struct SummariesSheet: View {
+    let summaries: [BatchSummary]
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Text("Summaries")
+                    .font(.title2.bold())
+                Spacer()
+                Button("Done") { dismiss() }
+                    .keyboardShortcut(.defaultAction)
+            }
+            if summaries.isEmpty {
+                Text("Summarizing…")
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, minHeight: 120)
+            } else {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 12) {
+                        ForEach(summaries) { item in
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(item.name)
+                                    .font(.headline)
+                                    .lineLimit(1)
+                                Text(item.summary)
+                                    .font(.callout)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(12)
+                            .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 10))
+                        }
+                    }
+                }
+            }
+        }
+        .padding(20)
+        .frame(width: 560, height: 460)
     }
 }
 
