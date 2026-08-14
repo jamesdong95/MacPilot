@@ -4,9 +4,10 @@ import AppKit
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // With a MenuBarExtra present, macOS may not open the main window on
-        // launch, so bring it up explicitly (after SwiftUI creates it).
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+        // A MenuBarExtra can leave the app in accessory mode; force regular
+        // activation so the WindowGroup window actually appears.
+        NSApp.setActivationPolicy(.regular)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
             Self.openMainWindow()
         }
     }
