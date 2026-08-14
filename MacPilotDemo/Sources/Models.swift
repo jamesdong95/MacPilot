@@ -6,6 +6,7 @@ enum AppSection: String, CaseIterable, Hashable, Identifiable {
     case search
     case suggestions
     case activity
+    case duplicates
 
     var id: Self { self }
 
@@ -14,6 +15,7 @@ enum AppSection: String, CaseIterable, Hashable, Identifiable {
         case .search: return "Search"
         case .suggestions: return "Suggestions"
         case .activity: return "Activity"
+        case .duplicates: return "Duplicates"
         }
     }
 
@@ -22,6 +24,7 @@ enum AppSection: String, CaseIterable, Hashable, Identifiable {
         case .search: return "Find files instantly"
         case .suggestions: return "Review move previews"
         case .activity: return "Local action history"
+        case .duplicates: return "Reclaim space safely"
         }
     }
 
@@ -30,6 +33,7 @@ enum AppSection: String, CaseIterable, Hashable, Identifiable {
         case .search: return "magnifyingglass"
         case .suggestions: return "sparkles"
         case .activity: return "clock.arrow.circlepath"
+        case .duplicates: return "doc.on.doc"
         }
     }
 }
@@ -59,6 +63,21 @@ struct OrgRule: Identifiable, Hashable {
 struct FileSummary: Hashable {
     let fileID: String
     let text: String
+}
+
+struct DuplicateGroup: Identifiable, Hashable {
+    let id: String
+    let size: Int
+    let paths: [String]
+
+    var sizeString: String {
+        ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file)
+    }
+
+    /// All but the first path (the kept copy) are the surplus copies.
+    var surplusPaths: [String] {
+        Array(paths.dropFirst())
+    }
 }
 
 enum LLMProvider: String, CaseIterable, Identifiable {

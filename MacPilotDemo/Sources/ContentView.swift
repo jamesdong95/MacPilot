@@ -18,6 +18,8 @@ struct ContentView: View {
                     SuggestionsView()
                 case .activity:
                     ActivityView()
+                case .duplicates:
+                    DuplicatesView()
                 }
             }
             .frame(minWidth: 760, minHeight: 560)
@@ -642,6 +644,75 @@ private struct ActivityView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("Every applied move will be reverted, newest first. Each revert stays individually undoable.")
+        }
+    }
+}
+
+private struct DuplicatesView: View {
+    @EnvironmentObject private var store: DemoStore
+    @State private var groupToClean: DuplicateGroup?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            PageHeader(
+                eyebrow: "RECLAIM SPACE",
+                title: "Duplicate files, found.",
+                subtitle: "Files with identical content are grouped. Trash the surplus copies safely."
+            )
+            ScrollView {
+                LazyVStack(spacing: 10) {
+                    ForEach(store.duplicateGroups) { group in
+                        HStack(spacing: 12) {
+                            Image(systemName: "doc.on.doc")
+                                .font(.title3)
+                                .foregroundStyle(.tint)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("\(group.paths.count) copies · \(group.sizeString) each")
+                                    .font(.headline)
+                                    .lineLimit(1)
+                                Text(group.paths.first ?? "")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(2)
+                            }
+                            Spacer(minLength: 8)
+                            Button("Clean \(group.surplusPaths.count)") {
+                                groupToClean = group
+                            }
+                            .buttonStyle(.bordered)
+                            .fixedSize()
+                        }
+                        .padding(14)
+                        .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 12))
+                    }
+                    if store.duplicateGroups.isEmpty {
+                        Text("No duplicate files detected.")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, minHeight: 80)
+                    }
+                }
+            }
+        }
+        .padding(18)
+        .onAppear { store.loadDuplicates() }
+        .confirmationDialog(
+            "Trash \(groupToClean?.surplusPaths.count ?? 0) duplicate(s)?",
+            isPresented: Binding(
+                get: { groupToClean != nil },
+                set: { if !$0 { groupToClean = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Move to Trash", role: .destructive) {
+                if let group = groupToClean {
+                    store.trashSurplus(in: group)
+                }
+                groupToClean = nil
+            }
+            Button("Cancel", role: .cancel) { groupToClean = nil }
+        } message: {
+            Text("The first copy is kept; the rest move to the Trash and can be undone from Activity.")
         }
     }
 }

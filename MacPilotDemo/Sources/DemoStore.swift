@@ -18,6 +18,7 @@ final class DemoStore: ObservableObject {
     @Published private(set) var fileSummary: FileSummary?
     @Published private(set) var summarizingFile = false
     @Published private(set) var indexProgress: Int?
+    @Published private(set) var duplicateGroups: [DuplicateGroup] = []
     @Published var llmProvider: LLMProvider = .ollama
     @Published var cloudBaseURL = ""
     @Published var cloudModel = "gpt-4o-mini"
@@ -298,6 +299,59 @@ final class DemoStore: ObservableObject {
             }
         }
         return env
+    }
+
+    func loadDuplicates() {
+        guard let client else { return }
+        operationTask?.cancel()
+        operationTask = Task { [weak self] in
+            do {
+                let groups = try await client.duplicates()
+                guard !Task.isCancelled else { return }
+                self?.duplicateGroups = groups.map {
+                    DuplicateGroup(id: $0.fingerprint, size: $0.size, paths: $0.paths)
+                }
+            } catch {
+                // Duplicates are optional; a failed load leaves the list empty.
+            }
+        }
+    }
+
+    /// Move every surplus copy in a duplicate group to the Trash, keeping the
+    /// first path. Each trash is individually undoable.
+    func trashSurplus(in group: DuplicateGroup) {
+        guard let client else {
+            statusMessage = "Local core unavailable · could not clean duplicates"
+            return
+        }
+        guard !isBusy else { return }
+        let surplus = group.surplusPaths
+        guard !surplus.isEmpty else { return }
+
+        operationTask?.cancel()
+        isBusy = true
+        statusMessage = "Moving \(surplus.count) duplicate(s) to Trash…"
+
+        operationTask = Task { [weak self] in
+            do {
+                var trashed = 0
+                for path in surplus {
+                    let outcome = try await client.trashApply(source: path)
+                    if outcome.applied { trashed += 1 }
+                }
+                guard !Task.isCancelled else { return }
+                try await self?.refreshAfterMutation()
+                guard !Task.isCancelled else { return }
+                self?.loadDuplicates()
+                self?.isBusy = false
+                self?.statusMessage =
+                    "Moved \(trashed) duplicate(s) to Trash · undo available in Activity"
+            } catch {
+                guard !Task.isCancelled else { return }
+                self?.isBusy = false
+                self?.statusMessage = Self.errorMessage(error)
+            }
+        }
     }
 
     private func rememberWorkspace(_ path: String) {
