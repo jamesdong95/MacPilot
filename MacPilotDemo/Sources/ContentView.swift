@@ -1124,20 +1124,27 @@ private struct EmptyWorkspaceCard: View {
     var onSelectRecent: (String) -> Void = { _ in }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             Image(systemName: "folder.badge.plus")
                 .font(.title2)
                 .foregroundStyle(.tint)
             VStack(alignment: .leading, spacing: 3) {
-                Text("Connect a local folder")
+                Text("Welcome to MacPilot")
                     .font(.headline)
                     .lineLimit(1)
-                Text("MacPilot will index it locally. Search and previews stay read-only until you confirm a move.")
+                Text("Search, organize, and understand your files — everything stays on this Mac.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
                     .minimumScaleFactor(0.9)
             }
+            VStack(alignment: .leading, spacing: 3) {
+                Label("1. Pick a folder", systemImage: "1.circle")
+                Label("2. Search or review suggestions", systemImage: "2.circle")
+                Label("3. Confirm before anything changes", systemImage: "3.circle")
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
             Button("Choose folder…", action: action)
                 .buttonStyle(.borderedProminent)
                 .frame(maxWidth: .infinity, alignment: .leading)

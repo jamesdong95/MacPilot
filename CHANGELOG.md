@@ -4,6 +4,19 @@ All notable changes to MacPilot are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-08-13
+
+### Added
+
+- Live index progress: the core streams "PROGRESS <n>" and the UI shows a
+  live "Indexed N files…" indicator while a folder indexes.
+- Duplicate sweep: a "Duplicates" section groups files by identical content
+  and offers one-click "Clean N" to trash the surplus copies (undoable).
+- First-run onboarding: the empty state is now a clear welcome with a
+  3-step guide and a plain-language "everything stays on this Mac" promise.
+- Local diagnostics log (opt-in, never uploaded) with open/clear actions in
+  Settings.
+
 ## [0.8.0] - 2026-08-13
 
 ### Added
