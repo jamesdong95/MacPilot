@@ -14,7 +14,7 @@
   <a href="https://github.com/jamesdong95/MacPilot/actions/workflows/macos-demo.yml"><img src="https://github.com/jamesdong95/MacPilot/actions/workflows/macos-demo.yml/badge.svg?branch=main" alt="macOS demo CI" /></a>
   <img src="https://img.shields.io/badge/platform-macOS-111827?logo=apple&logoColor=white" alt="macOS" />
   <img src="https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white" alt="Python 3.11 or newer" />
-  <img src="https://img.shields.io/badge/version-0.9.0-4C1D95" alt="Version 0.9.0" />
+  <img src="https://img.shields.io/badge/version-0.10.0-4C1D95" alt="Version 0.10.0" />
   <img src="https://img.shields.io/badge/privacy-local--first-06B6D4" alt="Local-first privacy" />
 </p>
 

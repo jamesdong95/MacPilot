@@ -5,6 +5,22 @@ import AppKit
 @main
 struct MacPilotDemoApp: App {
     @StateObject private var store = DemoStore()
+    private static var hotkeyMonitor: Any?
+
+    init() {
+        // Global hotkey (⌘⇧Space) opens/raises the main window from anywhere.
+        // Requires Accessibility permission; without it this silently no-ops.
+        Self.hotkeyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { event in
+            guard event.modifierFlags.contains(.command),
+                  event.modifierFlags.contains(.shift),
+                  event.keyCode == 49 else { return }
+            DispatchQueue.main.async {
+                NSApp.activate(ignoringOtherApps: true)
+                NSApp.windows.first(where: { $0.isVisible || $0.canBecomeMain })?
+                    .makeKeyAndOrderFront(nil)
+            }
+        }
+    }
 
     var body: some Scene {
         WindowGroup("MacPilot Demo") {
@@ -39,6 +55,10 @@ struct MacPilotDemoApp: App {
             Button("Quit MacPilot") {
                 NSApp.terminate(nil)
             }
+            Divider()
+            Text("⌘⇧Space to search")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         } label: {
             Image(systemName: "sparkle.magnifyingglass")
         }

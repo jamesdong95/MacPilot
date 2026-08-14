@@ -4,6 +4,19 @@ All notable changes to MacPilot are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - 2026-08-13
+
+### Added
+
+- Semantic search: index text content into embeddings (local Ollama or any
+  OpenAI-compatible /v1/embeddings endpoint) and search by meaning with
+  cosine-similarity ranking. A "Semantic" toggle in Search re-indexes with
+  embeddings and switches to meaning-based results.
+- Storage report: a "Storage" section showing total size, largest files, files
+  not touched in 90 days, and screenshots — each with a one-click Trash.
+- Global hotkey (⌘⇧Space) to open the window from anywhere (needs
+  Accessibility permission).
+
 ## [0.9.0] - 2026-08-13
 
 ### Added
