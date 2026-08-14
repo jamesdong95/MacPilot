@@ -384,6 +384,16 @@ private struct SearchView: View {
             .frame(minHeight: 120, maxHeight: .infinity)
             .layoutPriority(0)
 
+            if let progress = store.indexProgress {
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("Indexed \(progress) files…")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
             Text(store.statusMessage)
                 .font(.caption)
                 .foregroundStyle(.secondary)

@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from collections.abc import Callable
 from dataclasses import asdict
 from pathlib import Path
 
@@ -56,6 +57,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     index_parser = commands.add_parser("index", help="Index a folder")
     index_parser.add_argument("root", type=_path)
+    index_parser.add_argument(
+        "--progress",
+        action="store_true",
+        help="Emit PROGRESS <n> lines on stderr while indexing",
+    )
 
     search_parser = commands.add_parser("search", help="Search indexed files")
     search_parser.add_argument("query")
@@ -147,7 +153,11 @@ def main(argv: list[str] | None = None) -> int:
     try:
         with Database(args.db) as database:
             if args.command == "index":
-                _print(asdict(Indexer(database).index_root(args.root)))
+                progress: Callable[[int], None] | None = None
+                if getattr(args, "progress", False):
+                    def progress(n: int) -> None:
+                        print(f"PROGRESS {n}", file=sys.stderr, flush=True)
+                _print(asdict(Indexer(database).index_root(args.root, progress=progress)))
             elif args.command == "search":
                 _print([asdict(result) for result in search(database, args.query, args.limit)])
             elif args.command == "list":

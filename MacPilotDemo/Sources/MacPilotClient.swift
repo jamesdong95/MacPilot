@@ -259,12 +259,16 @@ struct MacPilotClient {
         return nil
     }
 
-    func index(root: URL) async throws -> CoreIndexSummary {
+    func index(
+        root: URL,
+        onProgress: (@Sendable (Int) -> Void)? = nil
+    ) async throws -> CoreIndexSummary {
         try await runAndDecode(
             CoreIndexSummary.self,
-            command: ["index", root.path],
+            command: ["index", root.path, "--progress"],
             label: "index",
-            timeout: Self.indexTimeout
+            timeout: Self.indexTimeout,
+            onProgress: onProgress
         )
     }
 
@@ -414,13 +418,15 @@ struct MacPilotClient {
         command: [String],
         label: String,
         timeout: TimeInterval? = nil,
-        extraEnvironment: [String: String] = [:]
+        extraEnvironment: [String: String] = [:],
+        onProgress: (@Sendable (Int) -> Void)? = nil
     ) async throws -> T {
         let data = try await run(
             command: command,
             label: label,
             timeout: timeout,
-            extraEnvironment: extraEnvironment
+            extraEnvironment: extraEnvironment,
+            onProgress: onProgress
         )
         do {
             let decoder = JSONDecoder()
@@ -438,7 +444,8 @@ struct MacPilotClient {
         command: [String],
         label: String,
         timeout: TimeInterval? = nil,
-        extraEnvironment: [String: String] = [:]
+        extraEnvironment: [String: String] = [:],
+        onProgress: (@Sendable (Int) -> Void)? = nil
     ) async throws -> Data {
         let effectiveTimeout = min(timeout ?? self.timeout, Self.maximumTimeout)
         let configuration = configuration
@@ -452,7 +459,8 @@ struct MacPilotClient {
                 label: label,
                 timeout: effectiveTimeout,
                 runner: runner,
-                extraEnvironment: extraEnvironment
+                extraEnvironment: extraEnvironment,
+                onProgress: onProgress
             )
         }
 
@@ -505,7 +513,8 @@ struct MacPilotClient {
         label: String,
         timeout: TimeInterval,
         runner: ProcessRunner,
-        extraEnvironment: [String: String] = [:]
+        extraEnvironment: [String: String] = [:],
+        onProgress: (@Sendable (Int) -> Void)? = nil
     ) async throws -> Data {
         try await withCheckedThrowingContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
@@ -560,9 +569,25 @@ struct MacPilotClient {
                 }
 
                 readGroup.enter()
-                DispatchQueue.global(qos: .utility).async {
-                    stderrCapture.set(stderrPipe.fileHandleForReading.readDataToEndOfFile())
-                    readGroup.leave()
+                let stderrHandle = stderrPipe.fileHandleForReading
+                stderrHandle.readabilityHandler = { handle in
+                    let chunk = handle.availableData
+                    if chunk.isEmpty {
+                        handle.readabilityHandler = nil
+                        readGroup.leave()
+                        return
+                    }
+                    stderrCapture.append(chunk)
+                    if let onProgress, let text = String(data: chunk, encoding: .utf8) {
+                        for line in text.split(separator: "\n") {
+                            let trimmed = line.trimmingCharacters(in: .whitespaces)
+                            guard trimmed.hasPrefix("PROGRESS "),
+                                  let value = Int(trimmed.dropFirst("PROGRESS ".count)) else {
+                                continue
+                            }
+                            onProgress(value)
+                        }
+                    }
                 }
 
                 process.waitUntilExit()
@@ -744,6 +769,12 @@ private final class PipeCapture {
     func set(_ data: Data) {
         lock.lock()
         captured = data
+        lock.unlock()
+    }
+
+    func append(_ data: Data) {
+        lock.lock()
+        captured.append(data)
         lock.unlock()
     }
 

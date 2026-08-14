@@ -17,6 +17,7 @@ final class DemoStore: ObservableObject {
     @Published private(set) var rules: [OrgRule] = []
     @Published private(set) var fileSummary: FileSummary?
     @Published private(set) var summarizingFile = false
+    @Published private(set) var indexProgress: Int?
     @Published var llmProvider: LLMProvider = .ollama
     @Published var cloudBaseURL = ""
     @Published var cloudModel = "gpt-4o-mini"
@@ -186,11 +187,16 @@ final class DemoStore: ObservableObject {
         searchResults = []
         operationTask?.cancel()
         isBusy = true
+        indexProgress = nil
         statusMessage = "Indexing \(workspaceURL.path) locally — large folders may take a while…"
 
         operationTask = Task { [weak self] in
             do {
-                let summary = try await client.index(root: workspaceURL)
+                let summary = try await client.index(root: workspaceURL) { count in
+                    Task { @MainActor [weak self] in
+                        self?.indexProgress = count
+                    }
+                }
                 let indexedFiles = try await client.list(root: workspaceURL)
                 let coreSuggestions = try await client.suggestions(root: workspaceURL)
                 let coreActions = try await client.actions()
@@ -203,6 +209,7 @@ final class DemoStore: ObservableObject {
                 self?.coreStatus = coreStatus
                 self?.rememberWorkspace(workspaceURL.path)
                 self?.lastIndexDate = Date()
+                self?.indexProgress = nil
                 self?.isBusy = false
                 self?.statusMessage = Self.indexStatus(
                     summary: summary,
@@ -211,6 +218,7 @@ final class DemoStore: ObservableObject {
                 )
             } catch {
                 guard !Task.isCancelled else { return }
+                self?.indexProgress = nil
                 self?.isBusy = false
                 self?.statusMessage = Self.errorMessage(error)
             }

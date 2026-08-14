@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+from collections.abc import Callable
 from pathlib import Path
 
 from .database import Database
@@ -25,7 +26,11 @@ class Indexer:
     def __init__(self, database: Database):
         self.database = database
 
-    def index_root(self, root: Path | str) -> IndexSummary:
+    def index_root(
+        self,
+        root: Path | str,
+        progress: "Callable[[int], None] | None" = None,
+    ) -> IndexSummary:
         root_path = Path(root).expanduser().resolve()
         if not root_path.is_dir():
             raise ValueError(f"Index root is not a directory: {root_path}")
@@ -35,6 +40,7 @@ class Indexer:
         content_files = 0
         skipped_symlinks = 0
         ignored_directories = 0
+        processed = 0
         seen: list[Path] = []
 
         for current, directories, filenames in os.walk(root_path, followlinks=False):
@@ -80,6 +86,9 @@ class Indexer:
                     content_files += int(is_text)
                 except (OSError, UnicodeError):
                     skipped += 1
+                processed += 1
+                if progress is not None and processed % 50 == 0:
+                    progress(processed)
 
         removed = self.database.remove_missing(root_path, seen)
         return IndexSummary(
