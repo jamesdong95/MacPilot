@@ -79,3 +79,50 @@ def list_indexed(
         )
         for row in rows
     ]
+
+
+def _cosine_similarity(a: list[float], b: list[float]) -> float:
+    dot = sum(x * y for x, y in zip(a, b))
+    norm_a = sum(x * x for x in a) ** 0.5
+    norm_b = sum(y * y for y in b) ** 0.5
+    if norm_a == 0 or norm_b == 0:
+        return 0.0
+    return dot / (norm_a * norm_b)
+
+
+def semantic_search(database, query: str, limit: int = 20) -> list[SearchResult]:
+    """Rank indexed files by embedding similarity to `query`.
+
+    Requires that files were indexed with ``--embed`` so their content vectors
+    are stored. Raises LLMUnavailableError when no embedding provider is
+    reachable (surfaced to the caller as a clear error).
+    """
+    if limit < 1 or limit > 200:
+        raise ValueError("limit must be between 1 and 200")
+    from .semantic import embed_texts
+
+    query_vector = embed_texts([query])[0]
+    scored: list[tuple[float, int, str]] = []
+    for file_id, vector, path in database.load_embeddings():
+        scored.append((_cosine_similarity(query_vector, vector), file_id, path))
+    scored.sort(key=lambda item: item[0], reverse=True)
+
+    results: list[SearchResult] = []
+    for score, file_id, path in scored[:limit]:
+        row = database.file_record(path)
+        if row is None:
+            continue
+        results.append(
+            SearchResult(
+                file_id=file_id,
+                path=Path(path),
+                filename=row["name"],
+                extension=row["extension"],
+                size=int(row["size"]),
+                modified_at=datetime.fromtimestamp(row["mtime_ns"] / 1_000_000_000),
+                snippet=row["name"],
+                score=float(score),
+                is_text=bool(row["is_text"]),
+            )
+        )
+    return results

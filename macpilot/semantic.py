@@ -27,6 +27,8 @@ from pathlib import Path
 DEFAULT_OLLAMA_URL = "http://localhost:11434"
 DEFAULT_MODEL = "qwen2.5:7b"
 DEFAULT_CLOUD_MODEL = "gpt-4o-mini"
+DEFAULT_EMBED_MODEL = "nomic-embed-text"
+DEFAULT_CLOUD_EMBED_MODEL = "text-embedding-3-small"
 REQUEST_TIMEOUT = 180
 _MAX_SUMMARY_CHARS = 8000
 
@@ -136,3 +138,58 @@ def summarize_file(
     file_path = Path(path).expanduser().resolve()
     data = file_path.read_text(encoding="utf-8", errors="replace")
     return summarize_text(data[:_MAX_SUMMARY_CHARS], model=model, provider=provider)
+
+
+def _ollama_embed(text: str, model: str) -> list[float]:
+    url = f"{ollama_base_url()}/api/embeddings"
+    response = _post_json(url, {"model": model, "prompt": text})
+    embedding = response.get("embedding")
+    if not embedding:
+        raise LLMUnavailableError(f"Ollama returned no embedding at {url}")
+    return [float(value) for value in embedding]
+
+
+def _cloud_embed(
+    texts: list[str],
+    base_url: str,
+    api_key: str,
+    model: str,
+) -> list[list[float]]:
+    url = base_url.rstrip("/") + "/v1/embeddings"
+    response = _post_json(
+        url,
+        {"model": model, "input": texts},
+        api_key=api_key or None,
+    )
+    data = response.get("data") or []
+    if not data:
+        raise LLMUnavailableError(f"Cloud LLM returned no embeddings at {url}")
+    return [[float(value) for value in item["embedding"]] for item in data]
+
+
+def embed_texts(
+    texts: list[str],
+    *,
+    provider: str | None = None,
+    model: str | None = None,
+) -> list[list[float]]:
+    """Embed a list of texts with the selected provider (env or explicit).
+
+    Returns one vector per input text, in order. The local provider uses the
+    Ollama embeddings endpoint; the cloud provider uses any OpenAI-compatible
+    ``/v1/embeddings`` endpoint.
+    """
+    selected = provider or os.environ.get("MACPILOT_LLM_PROVIDER", "ollama")
+    if selected == "cloud":
+        base_url = os.environ.get("MACPILOT_CLOUD_BASE_URL", "")
+        if not base_url:
+            raise LLMUnavailableError(
+                "Cloud provider needs MACPILOT_CLOUD_BASE_URL (or configure it in Settings)"
+            )
+        api_key = os.environ.get("MACPILOT_CLOUD_API_KEY", "")
+        embed_model = model or os.environ.get(
+            "MACPILOT_CLOUD_EMBED_MODEL", DEFAULT_CLOUD_EMBED_MODEL
+        )
+        return _cloud_embed(texts, base_url, api_key, embed_model)
+    embed_model = model or os.environ.get("MACPILOT_EMBED_MODEL", DEFAULT_EMBED_MODEL)
+    return [_ollama_embed(text, embed_model) for text in texts]

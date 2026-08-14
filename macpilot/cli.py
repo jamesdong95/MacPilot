@@ -19,7 +19,7 @@ from .organizer import (
     undo_action,
     undo_all,
 )
-from .search import list_indexed, search
+from .search import list_indexed, search, semantic_search
 from .semantic import DEFAULT_MODEL, OllamaUnavailableError, summarize_file
 
 
@@ -62,10 +62,20 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Emit PROGRESS <n> lines on stderr while indexing",
     )
+    index_parser.add_argument(
+        "--embed",
+        action="store_true",
+        help="Also embed text file content for semantic search (needs a running embedding provider)",
+    )
 
     search_parser = commands.add_parser("search", help="Search indexed files")
     search_parser.add_argument("query")
     search_parser.add_argument("--limit", type=int, default=20)
+    search_parser.add_argument(
+        "--semantic",
+        action="store_true",
+        help="Search by meaning (embedding similarity) instead of keywords",
+    )
 
     list_parser = commands.add_parser("list", help="List indexed files")
     list_parser.add_argument("--root", type=_path)
@@ -159,9 +169,18 @@ def main(argv: list[str] | None = None) -> int:
                 if getattr(args, "progress", False):
                     def progress(n: int) -> None:
                         print(f"PROGRESS {n}", file=sys.stderr, flush=True)
-                _print(asdict(Indexer(database).index_root(args.root, progress=progress)))
+                _print(asdict(Indexer(database).index_root(
+                    args.root,
+                    progress=progress,
+                    embed=getattr(args, "embed", False),
+                )))
             elif args.command == "search":
-                _print([asdict(result) for result in search(database, args.query, args.limit)])
+                if getattr(args, "semantic", False):
+                    _print([asdict(result) for result in semantic_search(
+                        database, args.query, args.limit
+                    )])
+                else:
+                    _print([asdict(result) for result in search(database, args.query, args.limit)])
             elif args.command == "list":
                 _print(
                     [

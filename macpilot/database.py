@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
+import json
 import time
 from datetime import datetime
 from pathlib import Path
@@ -84,6 +85,12 @@ class Database:
                 pattern TEXT NOT NULL UNIQUE,
                 destination TEXT NOT NULL,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS embeddings (
+                file_id INTEGER PRIMARY KEY,
+                vector TEXT NOT NULL,
+                FOREIGN KEY (file_id) REFERENCES files(id)
             );
 
             CREATE INDEX IF NOT EXISTS idx_files_root_path ON files(root_path);
@@ -190,6 +197,30 @@ class Database:
         cursor = connection.execute("DELETE FROM rules WHERE id = ?", (rule_id,))
         connection.commit()
         return cursor.rowcount > 0
+
+    def save_embedding(self, file_id: int, vector: list[float]) -> None:
+        connection = self._ensure_open()
+        connection.execute(
+            "INSERT OR REPLACE INTO embeddings (file_id, vector) VALUES (?, ?)",
+            (file_id, json.dumps(vector)),
+        )
+        connection.commit()
+
+    def load_embeddings(self) -> list[tuple[int, list[float], str]]:
+        """Return (file_id, vector, path) for every embedded file."""
+        connection = self._ensure_open()
+        rows = connection.execute(
+            "SELECT e.file_id AS file_id, e.vector AS vector, f.path AS path "
+            "FROM embeddings e JOIN files f ON f.id = e.file_id"
+        ).fetchall()
+        return [
+            (int(row["file_id"]), json.loads(row["vector"]), row["path"])
+            for row in rows
+        ]
+
+    def file_id_for(self, path: str | Path) -> int | None:
+        row = self.file_record(path)
+        return int(row["id"]) if row is not None else None
 
     def storage_report(self, *, top: int = 10) -> dict[str, Any]:
         """Summarize disk usage: totals, largest files, stale files, screenshots, duplicates."""

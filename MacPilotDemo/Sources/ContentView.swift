@@ -310,6 +310,19 @@ private struct SearchView: View {
                     }
                 }
                 Spacer(minLength: 2)
+                Toggle(isOn: $store.semanticMode) {
+                    Label("Semantic", systemImage: "sparkles")
+                        .font(.caption.weight(.medium))
+                        .lineLimit(1)
+                }
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .fixedSize()
+                .onChange(of: store.semanticMode) { enabled in
+                    if enabled, store.workspacePath != nil {
+                        store.reindex()
+                    }
+                }
                 Label("Local only", systemImage: "checkmark.shield")
                     .font(.caption.weight(.medium))
                     .foregroundStyle(.green)

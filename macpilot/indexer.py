@@ -30,10 +30,17 @@ class Indexer:
         self,
         root: Path | str,
         progress: "Callable[[int], None] | None" = None,
+        embed: bool = False,
     ) -> IndexSummary:
         root_path = Path(root).expanduser().resolve()
         if not root_path.is_dir():
             raise ValueError(f"Index root is not a directory: {root_path}")
+
+        embed_texts = None
+        if embed:
+            from .semantic import embed_texts as _embed_texts
+
+            embed_texts = _embed_texts
 
         indexed = 0
         skipped = 0
@@ -96,6 +103,15 @@ class Indexer:
                     seen.append(resolved)
                     indexed += int(changed)
                     content_files += int(is_text)
+                    if embed_texts is not None and is_text and content:
+                        try:
+                            file_id = self.database.file_id_for(resolved)
+                            if file_id is not None:
+                                vector = embed_texts([content[:2000]])[0]
+                                self.database.save_embedding(file_id, vector)
+                        except Exception:
+                            # Embedding is best-effort; never blocks indexing.
+                            pass
                 except (OSError, UnicodeError):
                     # A file that disappears mid-walk, loses permission, or is
                     # being written while indexed is skipped, never fatal.

@@ -278,13 +278,18 @@ struct MacPilotClient {
 
     func index(
         root: URL,
-        onProgress: (@Sendable (Int) -> Void)? = nil
+        onProgress: (@Sendable (Int) -> Void)? = nil,
+        embed: Bool = false,
+        extraEnvironment: [String: String] = [:]
     ) async throws -> CoreIndexSummary {
-        try await runAndDecode(
+        var command = ["index", root.path, "--progress"]
+        if embed { command.append("--embed") }
+        return try await runAndDecode(
             CoreIndexSummary.self,
-            command: ["index", root.path, "--progress"],
+            command: command,
             label: "index",
             timeout: Self.indexTimeout,
+            extraEnvironment: extraEnvironment,
             onProgress: onProgress
         )
     }
@@ -382,6 +387,19 @@ struct MacPilotClient {
             CoreStorageReport.self,
             command: ["storage"],
             label: "storage"
+        )
+    }
+
+    func semanticSearch(
+        query: String,
+        limit: Int = 20,
+        extraEnvironment: [String: String] = [:]
+    ) async throws -> [CoreSearchResult] {
+        try await runAndDecode(
+            [CoreSearchResult].self,
+            command: ["search", query, "--semantic", "--limit", String(limit)],
+            label: "semantic search",
+            extraEnvironment: extraEnvironment
         )
     }
 

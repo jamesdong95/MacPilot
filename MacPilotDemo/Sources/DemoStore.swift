@@ -14,6 +14,7 @@ final class DemoStore: ObservableObject {
     @Published var selectedSection: AppSection? = .search
     @Published var selectedFile: DemoFile?
     @Published var activeFilter: FileFilter = .all
+    @Published var semanticMode = false
     @Published private(set) var rules: [OrgRule] = []
     @Published private(set) var fileSummary: FileSummary?
     @Published private(set) var summarizingFile = false
@@ -212,11 +213,16 @@ final class DemoStore: ObservableObject {
 
         operationTask = Task { [weak self] in
             do {
-                let summary = try await client.index(root: workspaceURL) { count in
-                    Task { @MainActor [weak self] in
-                        self?.indexProgress = count
-                    }
-                }
+                let summary = try await client.index(
+                    root: workspaceURL,
+                    onProgress: { count in
+                        Task { @MainActor [weak self] in
+                            self?.indexProgress = count
+                        }
+                    },
+                    embed: self?.semanticMode ?? false,
+                    extraEnvironment: self?.cloudEnvironment() ?? [:]
+                )
                 let indexedFiles = try await client.list(root: workspaceURL)
                 let coreSuggestions = try await client.suggestions(root: workspaceURL)
                 let coreActions = try await client.actions()
@@ -797,9 +803,19 @@ final class DemoStore: ObservableObject {
         }
 
         isBusy = true
+        let environment = cloudEnvironment()
+        let useSemantic = semanticMode
         operationTask = Task { [weak self] in
             do {
-                let results = try await client.search(query: term)
+                let results: [CoreSearchResult]
+                if useSemantic {
+                    results = try await client.semanticSearch(
+                        query: term,
+                        extraEnvironment: environment
+                    )
+                } else {
+                    results = try await client.search(query: term)
+                }
                 guard !Task.isCancelled else { return }
                 self?.searchResults = results.map(Self.makeFile)
                 if let selected = self?.selectedFile,
