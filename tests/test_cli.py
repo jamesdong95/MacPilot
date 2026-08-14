@@ -313,6 +313,28 @@ class CliTests(unittest.TestCase):
                 else:
                     _os.environ[key] = value
 
+    def test_saved_searches_crud(self) -> None:
+        self.run_cli("index", str(self.workspace))
+
+        exit_code, payload, error = self.run_cli("saved", "add", "My search", "invoice")
+        self.assertEqual(exit_code, 0, error)
+        self.assertEqual(payload["name"], "My search")
+        self.assertEqual(payload["query"], "invoice")
+
+        exit_code, payload, error = self.run_cli("saved", "list")
+        self.assertEqual(exit_code, 0, error)
+        self.assertEqual(len(payload), 1)
+        self.assertEqual(payload[0]["query"], "invoice")
+
+        search_id = payload[0]["id"]
+        exit_code, payload, error = self.run_cli("saved", "remove", str(search_id))
+        self.assertEqual(exit_code, 0, error)
+        self.assertEqual(payload["removed"], True)
+
+        exit_code, payload, error = self.run_cli("saved", "list")
+        self.assertEqual(exit_code, 0, error)
+        self.assertEqual(payload, [])
+
     def test_duplicates_groups_identical_content(self) -> None:
         first = self.workspace / "copy-a.txt"
         second = self.workspace / "copy-b.txt"

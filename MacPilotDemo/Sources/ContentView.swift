@@ -194,6 +194,24 @@ private struct SidebarView: View {
                         .padding(.vertical, 3)
                     }
                 }
+                if !store.savedSearches.isEmpty {
+                    Section("Saved searches") {
+                        ForEach(store.savedSearches) { search in
+                            Button {
+                                store.runSavedSearch(search)
+                            } label: {
+                                Label(search.name, systemImage: "bookmark")
+                                    .lineLimit(1)
+                            }
+                            .buttonStyle(.plain)
+                            .contextMenu {
+                                Button("Delete", role: .destructive) {
+                                    store.removeSavedSearch(id: search.id)
+                                }
+                            }
+                        }
+                    }
+                }
             }
             .listStyle(.sidebar)
             .layoutPriority(1)
@@ -255,6 +273,8 @@ private struct SearchView: View {
     @State private var fileToTrash: DemoFile?
     @State private var showSummaries = false
     @FocusState private var searchFocused: Bool
+    @State private var showSaveSearch = false
+    @State private var saveSearchName = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -296,6 +316,16 @@ private struct SearchView: View {
                             .foregroundStyle(.secondary)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Clear search")
+                    Button {
+                        saveSearchName = store.query
+                        showSaveSearch = true
+                    } label: {
+                        Image(systemName: "bookmark")
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Save search")
                 }
             }
             .padding(10)
@@ -456,7 +486,19 @@ private struct SearchView: View {
         .sheet(isPresented: $showSummaries) {
             SummariesSheet(summaries: store.batchSummaries)
         }
-        .onAppear { searchFocused = true }
+        .alert("Save search", isPresented: $showSaveSearch) {
+            TextField("Name", text: $saveSearchName)
+            Button("Save") {
+                store.saveSearch(name: saveSearchName)
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Save the current query as a smart folder.")
+        }
+        .onAppear {
+            searchFocused = true
+            store.loadSavedSearches()
+        }
         .background {
             Button("") { searchFocused = true }
                 .keyboardShortcut("f", modifiers: .command)

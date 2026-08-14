@@ -100,6 +100,13 @@ class Database:
                 FOREIGN KEY (file_id) REFERENCES files(id)
             );
 
+            CREATE TABLE IF NOT EXISTS saved_searches (
+                id INTEGER PRIMARY KEY,
+                name TEXT NOT NULL,
+                query TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+
             CREATE INDEX IF NOT EXISTS idx_files_root_path ON files(root_path);
             CREATE INDEX IF NOT EXISTS idx_suggestions_status
                 ON suggestions(status);
@@ -252,6 +259,28 @@ class Database:
             "WHERE t.tag = ? ORDER BY f.mtime_ns DESC LIMIT ?",
             (tag, limit),
         ).fetchall()
+
+    def add_saved_search(self, name: str, query: str) -> int:
+        connection = self._ensure_open()
+        cursor = connection.execute(
+            "INSERT INTO saved_searches (name, query) VALUES (?, ?)",
+            (name, query),
+        )
+        connection.commit()
+        return int(cursor.lastrowid or 0)
+
+    def list_saved_searches(self) -> list[sqlite3.Row]:
+        connection = self._ensure_open()
+        return connection.execute(
+            "SELECT id, name, query, created_at FROM saved_searches "
+            "ORDER BY created_at DESC, id DESC"
+        ).fetchall()
+
+    def remove_saved_search(self, search_id: int) -> bool:
+        connection = self._ensure_open()
+        cursor = connection.execute("DELETE FROM saved_searches WHERE id = ?", (search_id,))
+        connection.commit()
+        return cursor.rowcount > 0
 
     def storage_report(self, *, top: int = 10) -> dict[str, Any]:
         """Summarize disk usage: totals, largest files, stale files, screenshots, duplicates."""

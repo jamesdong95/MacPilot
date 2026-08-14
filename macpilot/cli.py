@@ -125,6 +125,15 @@ def build_parser() -> argparse.ArgumentParser:
     tags_parser = commands.add_parser("tags", help="List auto-assigned tags and their files")
     tags_parser.add_argument("tag_name", nargs="?", help="Show files with a specific tag")
 
+    saved_parser = commands.add_parser("saved", help="Manage saved searches (smart folders)")
+    saved_sub = saved_parser.add_subparsers(dest="saved_action", required=True)
+    saved_sub.add_parser("list", help="List saved searches")
+    saved_add = saved_sub.add_parser("add", help="Save a search query")
+    saved_add.add_argument("name", help="Display name for the saved search")
+    saved_add.add_argument("query", help="Search query text")
+    saved_remove = saved_sub.add_parser("remove", help="Remove a saved search")
+    saved_remove.add_argument("search_id", type=int, help="Saved search id from 'saved list'")
+
     rules_parser = commands.add_parser("rules", help="Manage organization rules")
     rules_sub = rules_parser.add_subparsers(dest="rules_action", required=True)
     rules_sub.add_parser("list", help="List rules")
@@ -261,6 +270,14 @@ def main(argv: list[str] | None = None) -> int:
                         "GROUP BY tag ORDER BY count DESC"
                     ).fetchall()
                     _print([{"tag": row["tag"], "count": int(row["count"])} for row in rows])
+            elif args.command == "saved":
+                if args.saved_action == "list":
+                    _print([dict(row) for row in database.list_saved_searches()])
+                elif args.saved_action == "add":
+                    search_id = database.add_saved_search(args.name, args.query)
+                    _print({"id": search_id, "name": args.name, "query": args.query})
+                elif args.saved_action == "remove":
+                    _print({"removed": database.remove_saved_search(args.search_id)})
             elif args.command == "rules":
                 if args.rules_action == "list":
                     _print([dict(row) for row in database.list_rules()])

@@ -116,6 +116,12 @@ struct BatchSummary: Identifiable {
     let summary: String
 }
 
+struct SavedSearch: Identifiable, Hashable {
+    let id: Int
+    let name: String
+    let query: String
+}
+
 enum LLMProvider: String, CaseIterable, Identifiable {
     case ollama
     case cloud

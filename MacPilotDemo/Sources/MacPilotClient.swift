@@ -120,6 +120,12 @@ struct CoreBatchSummary: Decodable {
     let error: String?
 }
 
+struct CoreSavedSearch: Decodable {
+    let id: Int
+    let name: String
+    let query: String
+}
+
 
 struct CoreRenameItem: Decodable {
     let source: String?
@@ -433,6 +439,30 @@ struct MacPilotClient {
             label: "summarize batch",
             timeout: 600,
             extraEnvironment: extraEnvironment
+        )
+    }
+
+    func savedSearches() async throws -> [CoreSavedSearch] {
+        try await runAndDecode(
+            [CoreSavedSearch].self,
+            command: ["saved", "list"],
+            label: "saved list"
+        )
+    }
+
+    func addSavedSearch(name: String, query: String) async throws -> CoreSavedSearch {
+        try await runAndDecode(
+            CoreSavedSearch.self,
+            command: ["saved", "add", name, query],
+            label: "saved add"
+        )
+    }
+
+    func removeSavedSearch(id: Int) async throws -> [String: Bool] {
+        try await runAndDecode(
+            [String: Bool].self,
+            command: ["saved", "remove", String(id)],
+            label: "saved remove"
         )
     }
 

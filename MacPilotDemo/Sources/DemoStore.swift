@@ -23,6 +23,7 @@ final class DemoStore: ObservableObject {
     @Published private(set) var storageReport: StorageReport?
     @Published private(set) var batchSummaries: [BatchSummary] = []
     @Published private(set) var batchSummarizing = false
+    @Published private(set) var savedSearches: [SavedSearch] = []
     @Published var llmProvider: LLMProvider = .ollama
     @Published var cloudBaseURL = ""
     @Published var cloudModel = "gpt-4o-mini"
@@ -696,6 +697,64 @@ final class DemoStore: ObservableObject {
                 self?.statusMessage = Self.errorMessage(error)
             }
         }
+    }
+
+    func loadSavedSearches() {
+        guard let client else { return }
+        operationTask = Task { [weak self] in
+            do {
+                let searches = try await client.savedSearches()
+                guard !Task.isCancelled else { return }
+                self?.savedSearches = searches.map {
+                    SavedSearch(id: $0.id, name: $0.name, query: $0.query)
+                }
+            } catch {
+                // Saved searches are optional; a failed load leaves the list empty.
+            }
+        }
+    }
+
+    func saveSearch(name: String) {
+        guard let client else {
+            statusMessage = "Local core unavailable · save could not run"
+            return
+        }
+        let term = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !term.isEmpty else {
+            statusMessage = "Type a search before saving"
+            return
+        }
+        operationTask?.cancel()
+        operationTask = Task { [weak self] in
+            do {
+                _ = try await client.addSavedSearch(name: name, query: term)
+                guard !Task.isCancelled else { return }
+                self?.statusMessage = "Saved search"
+                self?.loadSavedSearches()
+            } catch {
+                guard !Task.isCancelled else { return }
+                self?.statusMessage = Self.errorMessage(error)
+            }
+        }
+    }
+
+    func removeSavedSearch(id: Int) {
+        guard let client else { return }
+        operationTask = Task { [weak self] in
+            do {
+                _ = try await client.removeSavedSearch(id: id)
+                guard !Task.isCancelled else { return }
+                self?.loadSavedSearches()
+            } catch {
+                // Optional cleanup; ignore failures.
+            }
+        }
+    }
+
+    func runSavedSearch(_ search: SavedSearch) {
+        query = search.query
+        selectedSection = .search
+        scheduleSearch()
     }
 
     func undoAllActions() {
