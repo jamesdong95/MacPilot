@@ -4,6 +4,17 @@ All notable changes to MacPilot are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0] - 2026-08-13
+
+### Added
+
+- Saved searches (smart folders): save a query from Search (bookmark button),
+  run it from the sidebar, delete via right-click. Backed by a saved_searches
+  table and a `saved` CLI command.
+- Keyboard navigation & accessibility: ⌘, opens Settings, ⌘F focuses search,
+  the search field auto-focuses, and key controls carry accessibility labels.
+- Runtime localization (English + Vietnamese) with a Language setting.
+
 ## [0.11.0] - 2026-08-13
 
 ### Added
