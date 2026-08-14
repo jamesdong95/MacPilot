@@ -57,6 +57,24 @@ final class DemoStore: ObservableObject {
         self.cloudBaseURL = UserDefaults.standard.string(forKey: "macpilot.cloudBaseURL") ?? ""
         self.cloudModel = UserDefaults.standard.string(forKey: "macpilot.cloudModel") ?? "gpt-4o-mini"
         self.cloudAPIKey = KeychainHelper.get("cloudAPIKey") ?? ""
+
+        // Restore the last folder's security-scoped access and re-index it,
+        // so relaunching doesn't re-prompt or leave the workspace empty.
+        if let bookmark = UserDefaults.standard.data(forKey: "macpilot.workspaceBookmark") {
+            var stale = false
+            if let url = try? URL(
+                resolvingBookmarkData: bookmark,
+                options: .withSecurityScope,
+                relativeTo: nil,
+                bookmarkDataIsStale: &stale
+            ) {
+                _ = url.startAccessingSecurityScopedResource()
+                self.securityScopedWorkspaceURL = url
+                DispatchQueue.main.async { [weak self] in
+                    self?.indexWorkspace(url)
+                }
+            }
+        }
     }
 
     deinit {
@@ -744,6 +762,15 @@ final class DemoStore: ObservableObject {
         securityScopedWorkspaceURL = nil
         if url.startAccessingSecurityScopedResource() {
             securityScopedWorkspaceURL = url
+            // Persist a security-scoped bookmark so relaunching doesn't force
+            // the user to re-pick (and re-grant) the same folder.
+            if let bookmark = try? url.bookmarkData(
+                options: .withSecurityScope,
+                includingResourceValuesForKeys: nil,
+                relativeTo: nil
+            ) {
+                UserDefaults.standard.set(bookmark, forKey: "macpilot.workspaceBookmark")
+            }
         }
     }
 

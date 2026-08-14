@@ -174,6 +174,23 @@ class CliTests(unittest.TestCase):
         self.assertIsNone(payload)
         self.assertIn("limit must be between 1 and 200", error)
 
+    def test_index_skips_icloud_placeholders(self) -> None:
+        placeholder = self.workspace / "photo.jpg.icloud"
+        placeholder.write_bytes(b"com.apple.icloud placeholder")
+        regular = self.workspace / "real.txt"
+        regular.write_text("real content", encoding="utf-8")
+
+        exit_code, payload, error = self.run_cli("index", str(self.workspace))
+        self.assertEqual(exit_code, 0, error)
+        self.assertEqual(payload["indexed_files"], 1)
+        self.assertGreaterEqual(payload["skipped_files"], 1)
+
+        exit_code, list_payload, error = self.run_cli("list", "--root", str(self.workspace))
+        self.assertEqual(exit_code, 0, error)
+        names = [Path(item["path"]).name for item in list_payload]
+        self.assertIn("real.txt", names)
+        self.assertNotIn("photo.jpg.icloud", names)
+
     def test_duplicates_groups_identical_content(self) -> None:
         first = self.workspace / "copy-a.txt"
         second = self.workspace / "copy-b.txt"

@@ -42,8 +42,15 @@ class Indexer:
         ignored_directories = 0
         processed = 0
         seen: list[Path] = []
+        walk_errors = [0]
 
-        for current, directories, filenames in os.walk(root_path, followlinks=False):
+        def _on_walk_error(error: OSError) -> None:
+            # Permission-denied / unreadable directories are counted, not fatal.
+            walk_errors[0] += 1
+
+        for current, directories, filenames in os.walk(
+            root_path, followlinks=False, onerror=_on_walk_error
+        ):
             current_path = Path(current)
             allowed_directories: list[str] = []
             for name in directories:
@@ -57,6 +64,11 @@ class Indexer:
             directories[:] = allowed_directories
 
             for filename in filenames:
+                # iCloud Drive placeholders end in ".icloud"; reading one
+                # forces a download, so skip them instead of stalling.
+                if filename.endswith(".icloud"):
+                    skipped += 1
+                    continue
                 path = current_path / filename
                 if path.is_symlink():
                     skipped_symlinks += 1
@@ -85,11 +97,14 @@ class Indexer:
                     indexed += int(changed)
                     content_files += int(is_text)
                 except (OSError, UnicodeError):
+                    # A file that disappears mid-walk, loses permission, or is
+                    # being written while indexed is skipped, never fatal.
                     skipped += 1
                 processed += 1
                 if progress is not None and processed % 50 == 0:
                     progress(processed)
 
+        ignored_directories += walk_errors[0]
         removed = self.database.remove_missing(root_path, seen)
         return IndexSummary(
             root=root_path,
