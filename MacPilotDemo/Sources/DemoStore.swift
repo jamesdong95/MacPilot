@@ -234,6 +234,25 @@ final class DemoStore: ObservableObject {
         reindex()
     }
 
+    /// Handle files/folders dropped onto the window: a folder indexes directly;
+    /// a file indexes its containing folder.
+    func handleDroppedURLs(_ urls: [URL]) {
+        guard let first = urls.first else { return }
+        var isDirectory: ObjCBool = false
+        let exists = FileManager.default.fileExists(
+            atPath: first.path,
+            isDirectory: &isDirectory
+        )
+        guard exists else {
+            statusMessage = "Dropped path no longer exists"
+            return
+        }
+        let target = isDirectory.boolValue
+            ? first
+            : first.deletingLastPathComponent()
+        indexWorkspace(target)
+    }
+
     private func rememberWorkspace(_ path: String) {
         var workspaces = recentWorkspaces.filter { $0 != path }
         workspaces.insert(path, at: 0)

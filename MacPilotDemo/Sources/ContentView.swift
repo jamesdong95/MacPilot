@@ -44,6 +44,23 @@ struct ContentView: View {
         .sheet(isPresented: $showSettings) {
             SettingsView()
         }
+        .onDrop(of: [.fileURL], isTargeted: nil) { providers in
+            var urls: [URL] = []
+            let group = DispatchGroup()
+            for provider in providers {
+                group.enter()
+                _ = provider.loadObject(ofClass: URL.self) { object, _ in
+                    if let url = object {
+                        urls.append(url)
+                    }
+                    group.leave()
+                }
+            }
+            group.notify(queue: .main) {
+                store.handleDroppedURLs(urls)
+            }
+            return true
+        }
     }
 
     /// Open the window at a compact, screen-safe size and center it so the app

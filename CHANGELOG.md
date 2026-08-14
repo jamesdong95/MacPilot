@@ -4,6 +4,16 @@ All notable changes to MacPilot are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-08-13
+
+### Added
+
+- Menu bar extra: shows the indexed-file count and the current folder, with
+  "Open MacPilot" and "Quit" actions.
+- Drag & drop: drop a folder (or a file) onto the window to index it directly.
+- Window fit now guards against bogus virtual-display frames so the window
+  never collapses to a titlebar sliver on VDI screens.
+
 ## [0.6.0] - 2026-08-13
 
 ### Added
