@@ -791,6 +791,7 @@ final class DemoStore: ObservableObject {
     }
 
     private static func errorMessage(_ error: Error) -> String {
+        Diagnostics.log("error: \(error.localizedDescription)")
         if let coreError = error as? MacPilotClientError {
             switch coreError {
             case .timedOut(let command, let timeout):

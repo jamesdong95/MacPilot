@@ -903,6 +903,28 @@ private struct SettingsView: View {
                 .buttonStyle(.bordered)
             }
 
+            Divider()
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Diagnostics")
+                    .font(.headline)
+                    .lineLimit(1)
+                Text("Errors are logged to a local file only — nothing is uploaded.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 8) {
+                    Button("Open diagnostics log") {
+                        NSWorkspace.shared.open(Diagnostics.logURL)
+                    }
+                    .buttonStyle(.bordered)
+                    Button("Clear log") {
+                        Diagnostics.clear()
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+
             LabeledContent("Indexed folder") {
                 Text(store.workspacePath ?? "None")
                     .foregroundStyle(.secondary)
@@ -995,7 +1017,7 @@ private struct SettingsView: View {
             }
         }
         .padding(20)
-        .frame(width: 520, height: 780)
+        .frame(width: 520, height: 860)
         .onAppear {
             cliPathText = store.configuredCliPath ?? ""
             dbPathText = store.configuredDatabasePath ?? store.databasePath ?? ""

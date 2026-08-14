@@ -75,6 +75,36 @@ enum LLMProvider: String, CaseIterable, Identifiable {
     }
 }
 
+/// Append-only local diagnostics log. Opt-in: nothing is ever uploaded.
+enum Diagnostics {
+    private static let formatter: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        return f
+    }()
+
+    static let logURL: URL = {
+        let dir = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Logs/MacPilot", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir.appendingPathComponent("macpilot.log")
+    }()
+
+    static func log(_ message: String) {
+        let line = "\(formatter.string(from: Date())) \(message)\n"
+        if let handle = try? FileHandle(forWritingTo: logURL) {
+            handle.seekToEndOfFile()
+            try? handle.write(contentsOf: line.data(using: .utf8) ?? Data())
+            try? handle.close()
+        } else {
+            try? line.data(using: .utf8)?.write(to: logURL)
+        }
+    }
+
+    static func clear() {
+        try? FileManager.default.removeItem(at: logURL)
+    }
+}
+
 /// Minimal Keychain wrapper for storing the optional cloud LLM API key.
 /// The key is never written to UserDefaults or the repository.
 enum KeychainHelper {
