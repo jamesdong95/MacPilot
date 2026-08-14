@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import sqlite3
+import time
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -188,6 +190,50 @@ class Database:
         cursor = connection.execute("DELETE FROM rules WHERE id = ?", (rule_id,))
         connection.commit()
         return cursor.rowcount > 0
+
+    def storage_report(self, *, top: int = 10) -> dict[str, Any]:
+        """Summarize disk usage: totals, largest files, stale files, screenshots, duplicates."""
+        connection = self._ensure_open()
+        total = connection.execute(
+            "SELECT COUNT(*) AS count, COALESCE(SUM(size), 0) AS size FROM files"
+        ).fetchone()
+
+        largest = connection.execute(
+            "SELECT path, size, mtime_ns FROM files ORDER BY size DESC LIMIT ?",
+            (top,),
+        ).fetchall()
+
+        stale_cutoff_ns = int((time.time() - 90 * 24 * 3600) * 1_000_000_000)
+        oldest = connection.execute(
+            "SELECT path, size, mtime_ns FROM files WHERE mtime_ns < ? "
+            "ORDER BY mtime_ns ASC LIMIT ?",
+            (stale_cutoff_ns, top),
+        ).fetchall()
+
+        screenshots = connection.execute(
+            "SELECT path, size, mtime_ns FROM files "
+            "WHERE name LIKE 'Screenshot%' OR name LIKE 'Screen Recording%' "
+            "ORDER BY mtime_ns DESC LIMIT ?",
+            (top,),
+        ).fetchall()
+
+        def _entry(row: sqlite3.Row) -> dict[str, Any]:
+            return {
+                "path": row["path"],
+                "size": int(row["size"]),
+                "modified_at": datetime.fromtimestamp(
+                    row["mtime_ns"] / 1_000_000_000
+                ).isoformat(),
+            }
+
+        return {
+            "total_files": int(total["count"]),
+            "total_size": int(total["size"]),
+            "largest": [_entry(row) for row in largest],
+            "oldest": [_entry(row) for row in oldest],
+            "screenshots": [_entry(row) for row in screenshots],
+            "duplicates": self.duplicate_groups(),
+        }
 
     def upsert_file(
         self,

@@ -19,6 +19,7 @@ final class DemoStore: ObservableObject {
     @Published private(set) var summarizingFile = false
     @Published private(set) var indexProgress: Int?
     @Published private(set) var duplicateGroups: [DuplicateGroup] = []
+    @Published private(set) var storageReport: StorageReport?
     @Published var llmProvider: LLMProvider = .ollama
     @Published var cloudBaseURL = ""
     @Published var cloudModel = "gpt-4o-mini"
@@ -331,6 +332,69 @@ final class DemoStore: ObservableObject {
                 }
             } catch {
                 // Duplicates are optional; a failed load leaves the list empty.
+            }
+        }
+    }
+
+    func loadStorage() {
+        guard let client else { return }
+        operationTask?.cancel()
+        operationTask = Task { [weak self] in
+            do {
+                let report = try await client.storage()
+                guard !Task.isCancelled else { return }
+                let largest = report.largest.map {
+                    StorageEntry(id: $0.path, path: $0.path, size: $0.size)
+                }
+                let oldest = report.oldest.map {
+                    StorageEntry(id: $0.path, path: $0.path, size: $0.size)
+                }
+                let screenshots = report.screenshots.map {
+                    StorageEntry(id: $0.path, path: $0.path, size: $0.size)
+                }
+                self?.storageReport = StorageReport(
+                    totalFiles: report.totalFiles,
+                    totalSize: report.totalSize,
+                    largest: largest,
+                    oldest: oldest,
+                    screenshots: screenshots
+                )
+            } catch {
+                // Storage report is optional; a failed load leaves it nil.
+            }
+        }
+    }
+
+    /// Trash a file by absolute path (used by the storage report entries).
+    func trash(path: String) {
+        guard let client else {
+            statusMessage = "Local core unavailable · trash could not run"
+            return
+        }
+        guard !isBusy else { return }
+        operationTask?.cancel()
+        isBusy = true
+        statusMessage = "Moving to Trash…"
+        operationTask = Task { [weak self] in
+            do {
+                let outcome = try await client.trashApply(source: path)
+                guard outcome.applied else {
+                    throw MacPilotClientError.commandFailed(
+                        command: "trash apply",
+                        message: "The core did not confirm the trash",
+                        status: -1
+                    )
+                }
+                guard !Task.isCancelled else { return }
+                try await self?.refreshAfterMutation()
+                guard !Task.isCancelled else { return }
+                self?.loadStorage()
+                self?.isBusy = false
+                self?.statusMessage = "Moved to Trash · undo available in Activity"
+            } catch {
+                guard !Task.isCancelled else { return }
+                self?.isBusy = false
+                self?.statusMessage = Self.errorMessage(error)
             }
         }
     }

@@ -191,6 +191,27 @@ class CliTests(unittest.TestCase):
         self.assertIn("real.txt", names)
         self.assertNotIn("photo.jpg.icloud", names)
 
+    def test_storage_report_shape(self) -> None:
+        big = self.workspace / "big.txt"
+        big.write_text("x" * 5000, encoding="utf-8")
+        small = self.workspace / "small.txt"
+        small.write_text("hi", encoding="utf-8")
+
+        exit_code, _, error = self.run_cli("index", str(self.workspace))
+        self.assertEqual(exit_code, 0, error)
+
+        exit_code, payload, error = self.run_cli("storage")
+        self.assertEqual(exit_code, 0, error)
+        self.assertEqual(
+            set(payload),
+            {"total_files", "total_size", "largest", "oldest", "screenshots", "duplicates"},
+        )
+        self.assertEqual(payload["total_files"], 2)
+        self.assertGreater(payload["total_size"], 0)
+        self.assertEqual(len(payload["largest"]), 2)
+        self.assertEqual(payload["largest"][0]["path"], str(big.resolve()))
+        self.assertEqual(payload["duplicates"], [])
+
     def test_duplicates_groups_identical_content(self) -> None:
         first = self.workspace / "copy-a.txt"
         second = self.workspace / "copy-b.txt"

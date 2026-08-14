@@ -7,6 +7,7 @@ enum AppSection: String, CaseIterable, Hashable, Identifiable {
     case suggestions
     case activity
     case duplicates
+    case storage
 
     var id: Self { self }
 
@@ -16,6 +17,7 @@ enum AppSection: String, CaseIterable, Hashable, Identifiable {
         case .suggestions: return "Suggestions"
         case .activity: return "Activity"
         case .duplicates: return "Duplicates"
+        case .storage: return "Storage"
         }
     }
 
@@ -25,6 +27,7 @@ enum AppSection: String, CaseIterable, Hashable, Identifiable {
         case .suggestions: return "Review move previews"
         case .activity: return "Local action history"
         case .duplicates: return "Reclaim space safely"
+        case .storage: return "See what's using space"
         }
     }
 
@@ -34,6 +37,7 @@ enum AppSection: String, CaseIterable, Hashable, Identifiable {
         case .suggestions: return "sparkles"
         case .activity: return "clock.arrow.circlepath"
         case .duplicates: return "doc.on.doc"
+        case .storage: return "internaldrive"
         }
     }
 }
@@ -77,6 +81,32 @@ struct DuplicateGroup: Identifiable, Hashable {
     /// All but the first path (the kept copy) are the surplus copies.
     var surplusPaths: [String] {
         Array(paths.dropFirst())
+    }
+}
+
+struct StorageEntry: Identifiable, Hashable {
+    let id: String
+    let path: String
+    let size: Int
+
+    var sizeString: String {
+        ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file)
+    }
+
+    var name: String {
+        URL(fileURLWithPath: path).lastPathComponent
+    }
+}
+
+struct StorageReport {
+    let totalFiles: Int
+    let totalSize: Int
+    let largest: [StorageEntry]
+    let oldest: [StorageEntry]
+    let screenshots: [StorageEntry]
+
+    var totalSizeString: String {
+        ByteCountFormatter.string(fromByteCount: Int64(totalSize), countStyle: .file)
     }
 }
 

@@ -110,6 +110,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     commands.add_parser("duplicates", help="Report duplicate files by content hash")
 
+    commands.add_parser("storage", help="Summarize disk usage (largest, stale, screenshots, duplicates)")
+
     rules_parser = commands.add_parser("rules", help="Manage organization rules")
     rules_sub = rules_parser.add_subparsers(dest="rules_action", required=True)
     rules_sub.add_parser("list", help="List rules")
@@ -221,6 +223,8 @@ def main(argv: list[str] | None = None) -> int:
                 _print(database.status_counts())
             elif args.command == "duplicates":
                 _print(database.duplicate_groups())
+            elif args.command == "storage":
+                _print(database.storage_report())
             elif args.command == "rules":
                 if args.rules_action == "list":
                     _print([dict(row) for row in database.list_rules()])

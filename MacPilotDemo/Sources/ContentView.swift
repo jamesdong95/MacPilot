@@ -20,6 +20,8 @@ struct ContentView: View {
                     ActivityView()
                 case .duplicates:
                     DuplicatesView()
+                case .storage:
+                    StorageView()
                 }
             }
             .frame(minWidth: 760, minHeight: 560)
@@ -713,6 +715,97 @@ private struct DuplicatesView: View {
             Button("Cancel", role: .cancel) { groupToClean = nil }
         } message: {
             Text("The first copy is kept; the rest move to the Trash and can be undone from Activity.")
+        }
+    }
+}
+
+private struct StorageView: View {
+    @EnvironmentObject private var store: DemoStore
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            PageHeader(
+                eyebrow: "STORAGE",
+                title: "What's using your space.",
+                subtitle: "Largest files, stale files, and screenshots — reviewed locally, trashed with a click."
+            )
+            if let report = store.storageReport {
+                HStack(spacing: 24) {
+                    stat("Files", "\(report.totalFiles)")
+                    stat("Indexed size", report.totalSizeString)
+                }
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 18) {
+                        entrySection("Largest files", report.largest)
+                        entrySection("Not touched in 90 days", report.oldest)
+                        entrySection("Screenshots", report.screenshots)
+                    }
+                }
+            } else {
+                Text("Choose a folder to see its storage breakdown.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, minHeight: 80)
+            }
+        }
+        .padding(18)
+        .onAppear { store.loadStorage() }
+    }
+
+    private func stat(_ label: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(value)
+                .font(.title2.bold())
+                .lineLimit(1)
+            Text(label)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+    }
+
+    private func entrySection(_ title: String, _ entries: [StorageEntry]) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.headline)
+                .lineLimit(1)
+            if entries.isEmpty {
+                Text("None")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(entries) { entry in
+                    HStack(spacing: 10) {
+                        Image(systemName: "doc")
+                            .foregroundStyle(.secondary)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(entry.name)
+                                .font(.callout)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                            Text(entry.path)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        }
+                        Spacer(minLength: 8)
+                        Text(entry.sizeString)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                        Button {
+                            store.trash(path: entry.path)
+                        } label: {
+                            Image(systemName: "trash")
+                        }
+                        .buttonStyle(.borderless)
+                        .help("Move to Trash")
+                    }
+                    .padding(8)
+                    .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 8))
+                }
+            }
         }
     }
 }

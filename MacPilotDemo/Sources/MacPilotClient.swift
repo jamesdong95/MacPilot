@@ -90,6 +90,23 @@ struct CoreDuplicateGroup: Decodable {
 }
 
 
+struct CoreStorageEntry: Decodable {
+    let path: String
+    let size: Int
+    let modifiedAt: String
+}
+
+
+struct CoreStorageReport: Decodable {
+    let totalFiles: Int
+    let totalSize: Int
+    let largest: [CoreStorageEntry]
+    let oldest: [CoreStorageEntry]
+    let screenshots: [CoreStorageEntry]
+    let duplicates: [CoreDuplicateGroup]
+}
+
+
 struct CoreSummarize: Decodable {
     let path: String
     let model: String
@@ -357,6 +374,14 @@ struct MacPilotClient {
             [CoreDuplicateGroup].self,
             command: ["duplicates"],
             label: "duplicates"
+        )
+    }
+
+    func storage() async throws -> CoreStorageReport {
+        try await runAndDecode(
+            CoreStorageReport.self,
+            command: ["storage"],
+            label: "storage"
         )
     }
 
